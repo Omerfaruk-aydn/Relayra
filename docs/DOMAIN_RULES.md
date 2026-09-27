@@ -114,7 +114,7 @@ Kod, API ve database tasarımı bu kuralları ihlal etmemelidir.
 
 - Presence persistent source of truth değildir.
 - Redis gibi ephemeral store kullanılabilir.
-- WebSocket disconnect sonrası kısa grace period uygulanabilir.
+- WebSocket disconnect sonrası 30 saniye grace period uygulanır.
 - Bir user'ın birden fazla active connection'ı olabilir.
 - Tek connection kapanınca diğer connection açıksa user OFFLINE olmamalıdır.
 
@@ -123,7 +123,7 @@ Kod, API ve database tasarımı bu kuralları ihlal etmemelidir.
 ## 11. Typing
 
 - Typing event DB'ye yazılmaz.
-- TTL tabanlıdır.
+- TTL 5 saniyedir.
 - Spam önlemek için client debounce + server rate limit uygulanabilir.
 - User scope'a erişemiyorsa typing event yayınlayamaz.
 
@@ -168,6 +168,7 @@ Kod, API ve database tasarımı bu kuralları ihlal etmemelidir.
 - Notification delivery başarısızlığı ana business transaction'ı gereksiz yere bozmayabilir.
 - Notification oluşturma idempotency gerekirse event ID ile sağlanır.
 - Kullanıcı sadece kendi notification'larını görebilir.
+- `type` değeri `FRIEND_REQUEST`, `MENTION`, `REACTION`, `MODERATION` veya `SYSTEM` olur.
 
 ---
 

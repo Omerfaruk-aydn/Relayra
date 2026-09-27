@@ -157,7 +157,7 @@ Client'ın gönderdiği userId'ye güvenilmemelidir.
 Typing:
 - ephemeral,
 - DB'ye yazılmaz,
-- TTL,
+- TTL 5 saniye,
 - throttled.
 
 ---
@@ -179,6 +179,7 @@ Presence event:
 
 Multi-device kuralı:
 - user'ın en az bir active connection'ı varsa OFFLINE olmamalıdır.
+- Son connection kapandıktan sonra 30 saniye grace period uygulanır.
 
 ---
 
@@ -262,10 +263,10 @@ Aynı timestamp oluşması pagination'ı bozmamalıdır.
 
 ## 15. Backpressure / Abuse
 
-- message send rate limit
-- typing throttle
-- max frame/payload size
-- max message length
+- message send rate limit (30/dakika/kullanıcı)
+- typing throttle (60/dakika/kullanıcı)
+- max frame/payload size 64 KB
+- max message length 4000 karakter
 - max subscription count if necessary
 - malformed frame handling
 

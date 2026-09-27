@@ -1,6 +1,6 @@
 {
   "project": "Relayra",
-  "documentation_version": "2.0-professional",
+  "documentation_version": "2.1-phase0",
   "files": [
     "ADR.md",
     "API.md",

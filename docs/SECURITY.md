@@ -27,17 +27,17 @@ Kurallar:
 - reversible encryption yok.
 
 Password policy:
-- minimum uzunluk,
+- minimum 8 karakter,
+- maksimum 72 karakter (bcrypt sınırı, DoS koruması),
 - aşırı karmaşık zorunluluk yerine güçlü uzunluk,
-- common-password kontrolü opsiyonel,
-- maksimum input length DoS riskine karşı sınırlı.
+- common-password kontrolü opsiyonel.
 
 ---
 
 ## 3. Access Token
 
 JWT:
-- kısa ömürlü,
+- kısa ömürlü (access token ömrü 15 dakika),
 - güçlü imza,
 - `sub`, `iat`, `exp`, `jti`,
 - issuer/audience uygun ise kullanılmalı.
@@ -53,9 +53,11 @@ Token'a uzun ömürlü dynamic permission set gömülmemelidir.
 - rotation,
 - family tracking,
 - revoke,
-- reuse detection değerlendirilmeli.
+- yeniden kullanım tespitinde tüm token family revoke edilir.
 
-Web frontend için HttpOnly + Secure + SameSite cookie modeli tercih edilebilir.
+Token taşıma modeli kilitlidir: access token `Authorization: Bearer` header ile taşınır, refresh token HttpOnly + Secure + SameSite=Lax cookie ile taşınır.
+
+Refresh token ömrü 30 gündür; her kullanımda rotation yapılır.
 
 CSRF etkisi seçilen token taşıma modeline göre ayrıca ele alınmalıdır.
 
@@ -135,8 +137,8 @@ Credentials kullanılıyorsa `*` yasaktır.
 ## 11. File Upload
 
 Zorunlu:
-- boyut limiti,
-- MIME kontrolü,
+- dosya başına en fazla 10 MB,
+- MIME kontrolü (izinli liste üzerinden),
 - extension policy,
 - random storage key,
 - path traversal prevention,
@@ -188,18 +190,18 @@ PII minimize edilir.
 
 ## 15. Rate Limits
 
-Özellikle:
-- login
-- register
-- refresh
-- user search
-- friend request
-- message send
-- typing
-- invite create
-- upload
+Baseline rate limitler (ayarlanabilir):
+- login: 5/dakika/IP
+- register: 3/saat/IP
+- refresh: 30/dakika/kullanıcı
+- user search: 60/dakika/kullanıcı
+- friend request: 20/saat/kullanıcı
+- message send: 30/dakika/kullanıcı
+- typing: 60/dakika/kullanıcı
+- invite create: 20/saat/kullanıcı
+- upload: 20/saat/kullanıcı
 
-limitlenmelidir.
+Limit aşımı `429 RATE_LIMITED` + `Retry-After` döner.
 
 ---
 
