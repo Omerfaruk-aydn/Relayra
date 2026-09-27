@@ -64,6 +64,18 @@ user_high_id UUID NOT NULL FK users(id)
 - Partial unique index: `UNIQUE(user_low_id, user_high_id) WHERE status = 'PENDING'`.
 - Ters yönde bekleyen istek varken yeni istek uygulama seviyesinde `409 DUPLICATE_RESOURCE` ile reddedilir; otomatik accept yapılmaz.
 
+### user_blocks
+```text
+id UUID PK
+blocker_id UUID NOT NULL FK users(id)
+blocked_id UUID NOT NULL FK users(id)
+created_at TIMESTAMPTZ NOT NULL
+UNIQUE(blocker_id, blocked_id)
+CHECK(blocker_id <> blocked_id)
+```
+
+Block, friendship ve DM kontrollerinde authoritative kaynaktır.
+
 ### communities
 ```text
 id UUID PK
@@ -140,6 +152,9 @@ CHECK(
 )
 UNIQUE(author_id, client_message_id)
 ```
+
+- `content`, TEXT tipi mesajlarda en fazla 4000 karakterdir; boş/whitespace-only içerik reddedilir.
+- `TEXT` tipi mesaj `content` ister; `FILE`/`IMAGE` tipi mesaj en az bir attachment ister.
 
 ### message_reactions
 ```text
@@ -275,6 +290,9 @@ messages(conversation_id, created_at DESC, id DESC)
 community_members(community_id, user_id)
 friendships(sender_id, receiver_id)
 friendships(receiver_id, status)
+friendships(user_low_id, user_high_id) WHERE status = 'PENDING' UNIQUE
+user_blocks(blocker_id, blocked_id)
+community_members(community_id, status)
 notifications(user_id, is_read, created_at DESC)
 invites(code)
 bans(community_id, user_id)
