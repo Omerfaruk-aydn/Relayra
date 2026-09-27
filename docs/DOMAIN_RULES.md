@@ -22,10 +22,10 @@ Kod, API ve database tasarımı bu kuralları ihlal etmemelidir.
 - User kendine friend request gönderemez.
 - Aynı iki kullanıcı arasında birden fazla aktif pending ilişki bulunamaz.
 - Block, friend request ve DM'i engeller.
-- Bir kullanıcı diğerini block ederse mevcut friendship davranışı açıkça tanımlanmalıdır.
+- Bir kullanıcı diğerini block ederse aradaki ACCEPTED friendship sonlandırılır, bekleyen istekler iptal edilir.
 - Accept yalnızca request receiver tarafından yapılabilir.
 - Reject yalnızca receiver tarafından yapılabilir.
-- Request sender kendi gönderdiği isteği cancel edebilmelidir ya da API bunu açıkça non-goal olarak belirtmelidir.
+- Request sender kendi gönderdiği pending isteği cancel edebilir.
 - Duplicate concurrent friend request database/transaction seviyesiyle kontrol edilmelidir.
 
 ---
@@ -37,7 +37,7 @@ Kod, API ve database tasarımı bu kuralları ihlal etmemelidir.
 - Owner membership yanlışlıkla silinemez.
 - Owner community'den ayrılamaz; önce ownership transfer veya community delete gerekir.
 - Community silme işlemi authorization + explicit confirmation gerektirir.
-- Community deletion cascade etkileri migration ve domain seviyesinde tanımlı olmalıdır.
+- Community silinince memberships, channels, roles, invites ve bans cascade silinir; audit log satırları `community_id` NULL yapılarak korunur.
 
 ---
 
@@ -53,6 +53,7 @@ Kod, API ve database tasarımı bu kuralları ihlal etmemelidir.
 
 ## 5. Invite
 
+- Invite code kriptografik rastgele üretilir, URL-safe ve en az 8 karakterdir.
 - Invite code unique olmalıdır.
 - Revoked invite kullanılamaz.
 - Expired invite kullanılamaz.
@@ -67,7 +68,7 @@ Kod, API ve database tasarımı bu kuralları ihlal etmemelidir.
 ## 6. Channel
 
 - Channel bir community'ye aittir.
-- Channel name normalize kuralları tanımlanmalıdır.
+- Channel adı trim edilir, uzunluğu 2-100 karakter aralığında olmalıdır.
 - Silinmiş channel'a mesaj gönderilemez.
 - Channel'a erişim yalnızca community membership + permission ile mümkündür.
 - Position reorder işlemi transaction içinde tutarlı sonuç üretmelidir.
@@ -104,8 +105,8 @@ Kod, API ve database tasarımı bu kuralları ihlal etmemelidir.
 - User conversation participant değilse history okuyamaz.
 - User conversation participant değilse message gönderemez.
 - Block ilişkisi DM send'i engeller.
-- Direct conversation duplicate creation davranışı belirlenmelidir:
-  - öneri: aynı iki kullanıcı için tek canonical direct conversation.
+- Aynı iki kullanıcı için tek canonical direct conversation vardır.
+- `direct_pair_key`, iki user ID sıralanarak `min:max` formatında üretilir.
 
 ---
 
@@ -136,6 +137,8 @@ Kod, API ve database tasarımı bu kuralları ihlal etmemelidir.
 - Admin kendinden yüksek role sahip member'ı yönetememelidir.
 - Owner tüm community permissions'a sahiptir.
 - Owner role silme/atama semantiği normal role gibi ele alınmamalıdır.
+- Default member rolü `VIEW_CHANNEL`, `SEND_MESSAGES`, `ADD_REACTIONS` ve `ATTACH_FILES` izinlerine sahiptir.
+- İlk sürümde channel-specific permission override yoktur.
 
 ---
 
