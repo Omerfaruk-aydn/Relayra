@@ -192,7 +192,7 @@ base member permissions
 - explicit system restrictions
 ```
 
-İlk sürümde channel-specific permission override eklenmeyecekse bu açıkça belirtilmelidir.
+İlk sürümde channel-specific permission override yoktur.
 
 ---
 
