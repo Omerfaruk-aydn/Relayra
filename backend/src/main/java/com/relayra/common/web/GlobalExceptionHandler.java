@@ -1,5 +1,6 @@
 package com.relayra.common.web;
 
+import com.relayra.auth.RateLimitedException;
 import com.relayra.common.error.ApiError;
 import com.relayra.common.error.DomainException;
 import com.relayra.common.error.ErrorCodes;
@@ -44,6 +45,17 @@ public class GlobalExceptionHandler {
                 request.getRequestURI(),
                 currentRequestId(),
                 errors));
+  }
+
+  @ExceptionHandler(RateLimitedException.class)
+  public ResponseEntity<ApiError> handleRateLimited(
+      RateLimitedException ex, HttpServletRequest request) {
+    return ResponseEntity.status(ex.getStatus())
+        .header("Retry-After", String.valueOf(ex.getRetryAfterSeconds()))
+        .body(
+            ApiError.of(
+                ex.getStatus(), ex.getCode(), ex.getMessage(), request.getRequestURI(),
+                currentRequestId()));
   }
 
   @ExceptionHandler(Exception.class)
