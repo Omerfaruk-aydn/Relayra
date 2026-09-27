@@ -43,8 +43,16 @@ GET  /api/v1/auth/me
 }
 ```
 
-Refresh token tercihen HttpOnly Secure cookie modelinde değerlendirilebilir.
-Eğer body ile taşınırsa threat model ve storage kararı açıkça documented olmalıdır.
+Refresh token HttpOnly + Secure + SameSite=Lax cookie ile taşınır.
+
+### Register Request
+```json
+{
+  "username": "omer",
+  "email": "omer@example.com",
+  "password": "••••••••"
+}
+```
 
 ---
 
@@ -56,7 +64,11 @@ GET   /api/v1/users/search?q={query}&limit={n}
 PATCH /api/v1/users/me/profile
 ```
 
-Search bounded olmalıdır.
+Search sınırlıdır: `q` en az 2, en fazla 64 karakterdir; `limit` varsayılan 20, en fazla 50'dir.
+
+### Profil Güncelleme
+
+Profil güncelleme display name (en fazla 64 karakter), bio (en fazla 500 karakter), timezone ve avatar/banner key alanlarını kabul eder; username ve email değiştirilemez.
 
 ---
 
@@ -75,6 +87,8 @@ POST   /api/v1/users/{userId}/block
 DELETE /api/v1/users/{userId}/block
 ```
 
+Arkadaşlık istekleri `receiverId` içeren body ile oluşturulur; karşılıklı eşzamanlı istek `409 DUPLICATE_RESOURCE` döner.
+
 ---
 
 ## 4. Communities
@@ -87,6 +101,8 @@ PATCH  /api/v1/communities/{communityId}
 DELETE /api/v1/communities/{communityId}
 POST   /api/v1/communities/{communityId}/leave
 ```
+
+Community adı 2-100 karakter aralığında olmalıdır. Silme işlemi için body içinde `confirmName` zorunludur.
 
 Ownership transfer gerekirse:
 ```http
@@ -103,6 +119,8 @@ DELETE /api/v1/communities/{communityId}/members/{userId}
 POST   /api/v1/communities/{communityId}/bans
 DELETE /api/v1/communities/{communityId}/bans/{userId}
 ```
+
+Ban isteği `userId` ve opsiyonel `reason` (en fazla 1000 karakter), `expiresAt` alanlarını içerir.
 
 ---
 
@@ -127,6 +145,8 @@ DELETE /api/v1/channels/{channelId}
 POST   /api/v1/communities/{communityId}/channels/reorder
 ```
 
+Reorder body sıralı `channelIds` listesi içerir ve transaction içinde uygulanır.
+
 ---
 
 ## 8. Messages
@@ -135,6 +155,8 @@ POST   /api/v1/communities/{communityId}/channels/reorder
 GET /api/v1/channels/{channelId}/messages?limit=50&beforeCreatedAt=...&beforeId=...
 GET /api/v1/conversations/{conversationId}/messages?limit=50&beforeCreatedAt=...&beforeId=...
 ```
+
+Mesaj listelerinde `limit` varsayılan 50, en fazla 100'dür; cursor `beforeCreatedAt` + `beforeId` kombinasyonudur.
 
 Edit:
 ```http
@@ -162,6 +184,8 @@ GET  /api/v1/conversations
 GET  /api/v1/conversations/{conversationId}
 ```
 
+DM gönderimi öncesi block ilişkisi kontrol edilir; block varsa `403 USER_BLOCKED` döner.
+
 ---
 
 ## 10. Notifications
@@ -176,7 +200,7 @@ POST  /api/v1/notifications/read-all
 
 ## 11. Upload
 
-Tercih edilen iki aşamalı model:
+Tercih edilen iki aşamalı model kilitlidir:
 
 ```http
 POST /api/v1/uploads
