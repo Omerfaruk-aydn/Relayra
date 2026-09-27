@@ -1,0 +1,23 @@
+{
+  "project": "Relayra",
+  "documentation_version": "2.0-professional",
+  "files": [
+    "ADR.md",
+    "API.md",
+    "APP.md",
+    "ARCHITECTURE.md",
+    "DATABASE.md",
+    "DEPLOYMENT.md",
+    "DOMAIN_RULES.md",
+    "IMPLEMENTATION_PLAN.md",
+    "MASTER_PROMPT.md",
+    "OBSERVABILITY.md",
+    "PROJECT.md",
+    "README.md",
+    "SECURITY.md",
+    "TESTING_QA.md",
+    "UI_UX.md",
+    "WEBSOCKET.md"
+  ],
+  "notes": "Production-minded specification pack. No software can guarantee zero bugs; this pack focuses on prevention, integrity, security, observability and testing."
+}
