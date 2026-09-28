@@ -7,11 +7,13 @@ import com.relayra.community.domain.CommunityMember;
 import com.relayra.community.domain.MemberStatus;
 import com.relayra.community.persistence.CommunityMemberRepository;
 import com.relayra.community.persistence.CommunityRepository;
+import com.relayra.moderation.persistence.CommunityBanRepository;
 import com.relayra.role.domain.MemberRole;
 import com.relayra.role.domain.Permission;
 import com.relayra.role.domain.Role;
 import com.relayra.role.persistence.MemberRoleRepository;
 import com.relayra.role.persistence.RoleRepository;
+import java.time.Instant;
 import java.util.EnumSet;
 import java.util.List;
 import java.util.Set;
@@ -25,16 +27,19 @@ public class PermissionService {
 
   private final CommunityRepository communities;
   private final CommunityMemberRepository members;
+  private final CommunityBanRepository bans;
   private final RoleRepository roles;
   private final MemberRoleRepository memberRoles;
 
   public PermissionService(
       CommunityRepository communities,
       CommunityMemberRepository members,
+      CommunityBanRepository bans,
       RoleRepository roles,
       MemberRoleRepository memberRoles) {
     this.communities = communities;
     this.members = members;
+    this.bans = bans;
     this.roles = roles;
     this.memberRoles = memberRoles;
   }
@@ -42,7 +47,8 @@ public class PermissionService {
   @Transactional(readOnly = true)
   public Set<Permission> resolve(UUID userId, UUID communityId) {
     Community community = requireCommunity(communityId);
-    CommunityMember membership = requireActiveMembership(userId, communityId);
+    requireNotBanned(communityId, userId);
+    CommunityMember membership = requireActiveMembershipValue(userId, communityId);
     if (community.getOwnerId().equals(userId)) {
       return Set.copyOf(EnumSet.allOf(Permission.class));
     }
@@ -82,7 +88,7 @@ public class PermissionService {
   @Transactional(readOnly = true)
   public int highestRolePosition(UUID userId, UUID communityId) {
     Community community = requireCommunity(communityId);
-    CommunityMember membership = requireActiveMembership(userId, communityId);
+    CommunityMember membership = requireActiveMembershipValue(userId, communityId);
     if (community.getOwnerId().equals(userId)) {
       return Integer.MAX_VALUE;
     }
@@ -109,7 +115,12 @@ public class PermissionService {
                     "Community was not found."));
   }
 
-  private CommunityMember requireActiveMembership(UUID userId, UUID communityId) {
+  private void requireActiveMembership(UUID userId, UUID communityId) {
+    requireNotBanned(communityId, userId);
+    requireActiveMembershipValue(userId, communityId);
+  }
+
+  private CommunityMember requireActiveMembershipValue(UUID userId, UUID communityId) {
     return members
         .findByCommunityIdAndUserId(communityId, userId)
         .filter(member -> member.getStatus() == MemberStatus.ACTIVE)
@@ -119,5 +130,18 @@ public class PermissionService {
                     HttpStatus.FORBIDDEN.value(),
                     ErrorCodes.ACCESS_DENIED,
                     "Community membership is required."));
+  }
+
+  private void requireNotBanned(UUID communityId, UUID userId) {
+    boolean banned =
+        bans.findByCommunityIdAndUserId(communityId, userId)
+            .filter(ban -> !ban.isExpired(Instant.now()))
+            .isPresent();
+    if (banned) {
+      throw new DomainException(
+          HttpStatus.FORBIDDEN.value(),
+          ErrorCodes.USER_BANNED,
+          "You are banned from this community.");
+    }
   }
 }

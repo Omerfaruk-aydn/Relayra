@@ -9,6 +9,7 @@ import com.relayra.community.domain.CommunityMember;
 import com.relayra.community.domain.MemberStatus;
 import com.relayra.community.persistence.CommunityMemberRepository;
 import com.relayra.community.persistence.CommunityRepository;
+import com.relayra.audit.AuditService;
 import com.relayra.role.domain.MemberRole;
 import com.relayra.role.domain.MemberRoleId;
 import com.relayra.role.domain.Permission;
@@ -41,6 +42,7 @@ public class RoleService {
   private final CommunityMemberRepository members;
   private final PermissionService permissions;
   private final RateLimiter rateLimiter;
+  private final AuditService audit;
 
   public RoleService(
       RoleRepository roles,
@@ -48,13 +50,15 @@ public class RoleService {
       CommunityRepository communities,
       CommunityMemberRepository members,
       PermissionService permissions,
-      RateLimiter rateLimiter) {
+      RateLimiter rateLimiter,
+      AuditService audit) {
     this.roles = roles;
     this.memberRoles = memberRoles;
     this.communities = communities;
     this.members = members;
     this.permissions = permissions;
     this.rateLimiter = rateLimiter;
+    this.audit = audit;
   }
 
   @Transactional
@@ -79,7 +83,9 @@ public class RoleService {
     role.update(name, normalizeColor(request.color()), requestedPermissions);
     try {
       roles.saveAll(locked);
-      return toResponse(roles.saveAndFlush(role));
+      RoleResponse created = toResponse(roles.saveAndFlush(role));
+      audit.record(communityId, callerId, "ROLE_CREATED", null, created.id(), created.name());
+      return created;
     } catch (DataIntegrityViolationException exception) {
       throw new DomainException(
           HttpStatus.CONFLICT.value(),
@@ -116,7 +122,10 @@ public class RoleService {
     requireCanGrantPermissions(callerId, community, nextPermissions);
     role.update(name, color, nextPermissions);
     try {
-      return toResponse(roles.saveAndFlush(role));
+      RoleResponse updated = toResponse(roles.saveAndFlush(role));
+      audit.record(
+          community.getId(), callerId, "ROLE_UPDATED", null, updated.id(), updated.name());
+      return updated;
     } catch (DataIntegrityViolationException exception) {
       throw new DomainException(
           HttpStatus.CONFLICT.value(),
@@ -144,6 +153,7 @@ public class RoleService {
     requireCanManageRole(callerId, community, role);
     memberRoles.deleteByIdRoleId(roleId);
     roles.delete(role);
+    audit.record(community.getId(), callerId, "ROLE_DELETED", null, roleId, role.getName());
     int position = 0;
     for (Role remaining : locked) {
       if (!remaining.getId().equals(roleId)) {
@@ -204,6 +214,7 @@ public class RoleService {
     MemberRoleId assignmentId = new MemberRoleId(target.getId(), roleId);
     if (!memberRoles.existsById(assignmentId)) {
       memberRoles.saveAndFlush(new MemberRole(assignmentId));
+      audit.record(communityId, callerId, "ROLE_ASSIGNED", targetUserId, roleId, role.getName());
     }
     return toResponse(role);
   }
@@ -219,6 +230,7 @@ public class RoleService {
     CommunityMember target = requireActiveMembership(targetUserId, communityId);
     requireCanManageTarget(callerId, community, targetUserId, role);
     memberRoles.deleteById(new MemberRoleId(target.getId(), roleId));
+    audit.record(communityId, callerId, "ROLE_UNASSIGNED", targetUserId, roleId, role.getName());
   }
 
   @Transactional(readOnly = true)

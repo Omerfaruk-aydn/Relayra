@@ -120,7 +120,7 @@ POST   /api/v1/communities/{communityId}/bans
 DELETE /api/v1/communities/{communityId}/bans/{userId}
 ```
 
-Ban isteği `userId` ve opsiyonel `reason` (en fazla 1000 karakter), `expiresAt` alanlarını içerir.
+Ban isteği `userId` ve opsiyonel `reason` (en fazla 1000 karakter), `expiresAt` alanlarını içerir. Kick `DELETE /api/v1/communities/{communityId}/members/{userId}` (`KICK_MEMBERS`), ban listesi `GET /api/v1/communities/{communityId}/bans` (`BAN_MEMBERS`), audit log `GET /api/v1/communities/{communityId}/audit-log?limit=50&beforeCreatedAt=...&beforeId=...` (`VIEW_AUDIT_LOG`) ile okunur. Banlı kullanıcı community kaynaklarına `403 USER_BANNED` ile erişemez, invite ile katılamaz ve ban sonrası üyeliği sonlandırılır; unban üyeliği otomatik geri getirmez. Rol hiyerarşisi kick/ban'de uygulanır: owner dokunulamaz, eşit veya üst pozisyondaki üye yönetilemez.
 
 ---
 

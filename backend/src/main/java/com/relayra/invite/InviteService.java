@@ -13,6 +13,8 @@ import com.relayra.community.domain.MemberStatus;
 import com.relayra.community.dto.MemberResponse;
 import com.relayra.community.persistence.CommunityMemberRepository;
 import com.relayra.community.persistence.CommunityRepository;
+import com.relayra.moderation.persistence.CommunityBanRepository;
+import com.relayra.audit.AuditService;
 import com.relayra.invite.domain.Invite;
 import com.relayra.invite.dto.CreateInviteRequest;
 import com.relayra.invite.dto.InviteResponse;
@@ -36,24 +38,30 @@ public class InviteService {
   private final InviteRepository invites;
   private final CommunityRepository communities;
   private final CommunityMemberRepository members;
+  private final CommunityBanRepository bans;
   private final UserRepository users;
   private final RateLimiter rateLimiter;
   private final PermissionService permissions;
+  private final AuditService audit;
   private final SecureRandom random = new SecureRandom();
 
   public InviteService(
       InviteRepository invites,
       CommunityRepository communities,
       CommunityMemberRepository members,
+      CommunityBanRepository bans,
       UserRepository users,
       RateLimiter rateLimiter,
-      PermissionService permissions) {
+      PermissionService permissions,
+      AuditService audit) {
     this.invites = invites;
     this.communities = communities;
     this.members = members;
+    this.bans = bans;
     this.users = users;
     this.rateLimiter = rateLimiter;
     this.permissions = permissions;
+    this.audit = audit;
   }
 
   @Transactional
@@ -80,7 +88,9 @@ public class InviteService {
       Invite invite = new Invite(UUID.randomUUID(), communityId, callerId, code);
       invite.configure(request.maxUses(), request.expiresAt());
       try {
-        return toResponse(invites.saveAndFlush(invite));
+        InviteResponse created = toResponse(invites.saveAndFlush(invite));
+        audit.record(communityId, callerId, "INVITE_CREATED", null, created.id(), created.code());
+        return created;
       } catch (DataIntegrityViolationException e) {
         if (invites.findByCode(code).isPresent()) {
           continue;
@@ -136,6 +146,7 @@ public class InviteService {
                         ErrorCodes.INVITE_INVALID,
                         "Invite is invalid."));
     Community community = requireCommunity(invite.getCommunityId());
+    requireNotBanned(community.getId(), caller.getId());
     var existing = members.findByCommunityIdAndUserId(community.getId(), caller.getId());
     if (existing.isPresent()) {
       if (existing.get().getStatus() == MemberStatus.ACTIVE) {
@@ -206,6 +217,8 @@ public class InviteService {
     Community community = requireCommunity(invite.getCommunityId());
     permissions.require(callerId, community.getId(), Permission.MANAGE_INVITES);
     invite.revoke();
+    audit.record(
+        community.getId(), callerId, "INVITE_REVOKED", null, invite.getId(), invite.getCode());
   }
 
   @Transactional(readOnly = true)
@@ -248,6 +261,17 @@ public class InviteService {
     byte[] bytes = new byte[9];
     random.nextBytes(bytes);
     return Base64.getUrlEncoder().withoutPadding().encodeToString(bytes);
+  }
+
+  private void requireNotBanned(UUID communityId, UUID userId) {
+    boolean banned =
+        bans.findByCommunityIdAndUserId(communityId, userId)
+            .filter(ban -> !ban.isExpired(Instant.now()))
+            .isPresent();
+    if (banned) {
+      throw new DomainException(
+          HttpStatus.FORBIDDEN.value(), ErrorCodes.USER_BANNED, "You are banned from this community.");
+    }
   }
 
   private String mapState(IllegalStateException e) {

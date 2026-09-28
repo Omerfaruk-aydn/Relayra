@@ -24,6 +24,7 @@ import com.relayra.reaction.domain.MessageReaction;
 import com.relayra.reaction.dto.ReactionResponse;
 import com.relayra.reaction.persistence.MessageReactionRepository;
 import com.relayra.realtime.MessageChangedEvent;
+import com.relayra.audit.AuditService;
 import com.relayra.role.PermissionService;
 import com.relayra.role.domain.Permission;
 import java.time.Duration;
@@ -51,6 +52,7 @@ public class MessageService {
   private final PermissionService permissions;
   private final RateLimiter rateLimiter;
   private final ApplicationEventPublisher eventPublisher;
+  private final AuditService audit;
 
   public MessageService(
       MessageRepository messages,
@@ -61,7 +63,8 @@ public class MessageService {
       ProfileRepository profiles,
       PermissionService permissions,
       RateLimiter rateLimiter,
-      ApplicationEventPublisher eventPublisher) {
+      ApplicationEventPublisher eventPublisher,
+      AuditService audit) {
     this.messages = messages;
     this.messageReactions = messageReactions;
     this.channels = channels;
@@ -71,6 +74,7 @@ public class MessageService {
     this.permissions = permissions;
     this.rateLimiter = rateLimiter;
     this.eventPublisher = eventPublisher;
+    this.audit = audit;
   }
 
   @Transactional
@@ -342,7 +346,8 @@ public class MessageService {
 
   private void deleteChannelMessage(UUID callerId, Message snapshot) {
     Channel channel = requireMessageChannel(snapshot);
-    if (!snapshot.getAuthorId().equals(callerId)) {
+    boolean moderatorDelete = !snapshot.getAuthorId().equals(callerId);
+    if (moderatorDelete) {
       permissions.require(callerId, channel.getCommunityId(), Permission.DELETE_MESSAGES);
     } else {
       permissions.require(callerId, channel.getCommunityId(), Permission.VIEW_CHANNEL);
@@ -353,6 +358,15 @@ public class MessageService {
           HttpStatus.NOT_FOUND.value(), ErrorCodes.RESOURCE_NOT_FOUND, "Message was not found.");
     }
     applyDelete(message);
+    if (moderatorDelete) {
+      audit.record(
+          channel.getCommunityId(),
+          callerId,
+          "MESSAGE_DELETED",
+          message.getAuthorId(),
+          message.getId(),
+          channel.getId().toString());
+    }
   }
 
   private void deleteConversationMessage(UUID callerId, Message snapshot) {
@@ -375,9 +389,8 @@ public class MessageService {
     message.softDelete();
     messages.flush();
     User author = requireUser(message.getAuthorId());
-    eventPublisher.publishEvent(
-        new MessageChangedEvent(
-            "MESSAGE_DELETED", toResponse(message, author, displayName(author))));
+    MessageResponse response = toResponse(message, author, displayName(author));
+    eventPublisher.publishEvent(new MessageChangedEvent("MESSAGE_DELETED", response));
   }
 
   private User requireActiveUser(UUID userId) {

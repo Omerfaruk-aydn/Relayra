@@ -16,6 +16,7 @@ import com.relayra.common.error.DomainException;
 import com.relayra.common.error.ErrorCodes;
 import com.relayra.community.domain.Community;
 import com.relayra.community.persistence.CommunityRepository;
+import com.relayra.audit.AuditService;
 import com.relayra.role.PermissionService;
 import com.relayra.role.domain.Permission;
 import java.time.Duration;
@@ -36,18 +37,21 @@ public class ChannelService {
   private final UserRepository users;
   private final RateLimiter rateLimiter;
   private final PermissionService permissions;
+  private final AuditService audit;
 
   public ChannelService(
       ChannelRepository channels,
       CommunityRepository communities,
       UserRepository users,
       RateLimiter rateLimiter,
-      PermissionService permissions) {
+      PermissionService permissions,
+      AuditService audit) {
     this.channels = channels;
     this.communities = communities;
     this.users = users;
     this.rateLimiter = rateLimiter;
     this.permissions = permissions;
+    this.audit = audit;
   }
 
   @Transactional
@@ -71,7 +75,10 @@ public class ChannelService {
     Channel channel =
         new Channel(UUID.randomUUID(), communityId, name, type, nextPosition);
     channel.update(name, description);
-    return toResponse(channels.saveAndFlush(channel));
+    ChannelResponse created = toResponse(channels.saveAndFlush(channel));
+    audit.record(
+        community.getId(), callerId, "CHANNEL_CREATED", null, created.id(), created.name());
+    return created;
   }
 
   @Transactional(readOnly = true)
@@ -102,7 +109,10 @@ public class ChannelService {
     String description =
         request.description() == null ? channel.getDescription() : trimToNull(request.description());
     channel.update(name, description);
-    return toResponse(channels.saveAndFlush(channel));
+    ChannelResponse updated = toResponse(channels.saveAndFlush(channel));
+    audit.record(
+        community.getId(), callerId, "CHANNEL_UPDATED", null, updated.id(), updated.name());
+    return updated;
   }
 
   @Transactional
@@ -134,6 +144,8 @@ public class ChannelService {
       }
     }
     channels.flush();
+    audit.record(
+        community.getId(), callerId, "CHANNEL_DELETED", null, channelId, channel.getName());
   }
 
   @Transactional

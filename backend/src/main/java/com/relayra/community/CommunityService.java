@@ -18,6 +18,7 @@ import com.relayra.community.dto.TransferOwnershipRequest;
 import com.relayra.community.dto.UpdateCommunityRequest;
 import com.relayra.community.persistence.CommunityMemberRepository;
 import com.relayra.community.persistence.CommunityRepository;
+import com.relayra.audit.AuditService;
 import com.relayra.role.domain.Permission;
 import com.relayra.role.domain.Role;
 import com.relayra.role.persistence.RoleRepository;
@@ -40,18 +41,21 @@ public class CommunityService {
   private final ChannelRepository channels;
   private final RoleRepository roles;
   private final UserRepository users;
+  private final AuditService audit;
 
   public CommunityService(
       CommunityRepository communities,
       CommunityMemberRepository members,
       ChannelRepository channels,
       RoleRepository roles,
-      UserRepository users) {
+      UserRepository users,
+      AuditService audit) {
     this.communities = communities;
     this.members = members;
     this.channels = channels;
     this.roles = roles;
     this.users = users;
+    this.audit = audit;
   }
 
   @Transactional
@@ -131,6 +135,8 @@ public class CommunityService {
           "Community name must be between 2 and 100 characters.");
     }
     community.rename(name, description, iconKey);
+    audit.record(
+        community.getId(), callerId, "COMMUNITY_UPDATED", null, community.getId(), name);
     return toResponse(
         community, members.countByCommunityIdAndStatus(communityId, MemberStatus.ACTIVE));
   }
@@ -148,6 +154,8 @@ public class CommunityService {
     }
     channels.deleteByCommunityId(communityId);
     roles.deleteByCommunityId(communityId);
+    audit.record(
+        communityId, callerId, "COMMUNITY_DELETED", null, communityId, community.getName());
     communities.delete(community);
   }
 
