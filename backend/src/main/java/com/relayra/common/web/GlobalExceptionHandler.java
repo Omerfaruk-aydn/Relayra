@@ -8,8 +8,10 @@ import jakarta.servlet.http.HttpServletRequest;
 import java.util.Map;
 import java.util.stream.Collectors;
 import org.slf4j.MDC;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.orm.ObjectOptimisticLockingFailureException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
@@ -55,6 +57,22 @@ public class GlobalExceptionHandler {
         .body(
             ApiError.of(
                 ex.getStatus(), ex.getCode(), ex.getMessage(), request.getRequestURI(),
+                currentRequestId()));
+  }
+
+  @ExceptionHandler({
+    ObjectOptimisticLockingFailureException.class,
+    jakarta.persistence.OptimisticLockException.class,
+    IllegalStateException.class
+  })
+  public ResponseEntity<ApiError> handleConflict(Exception ex, HttpServletRequest request) {
+    return ResponseEntity.status(HttpStatus.CONFLICT)
+        .body(
+            ApiError.of(
+                HttpStatus.CONFLICT.value(),
+                ErrorCodes.CONFLICT,
+                "Resource was modified concurrently. Please retry.",
+                request.getRequestURI(),
                 currentRequestId()));
   }
 
