@@ -1,6 +1,7 @@
 package com.relayra.realtime;
 
 import com.relayra.conversation.ConversationService;
+import com.relayra.notification.dto.NotificationEventData;
 import com.relayra.reaction.dto.ReactionEventData;
 import com.relayra.realtime.dto.RealtimeEvent;
 import java.time.Instant;
@@ -64,5 +65,15 @@ public class MessageRealtimeBroadcaster {
         messagingTemplate.convertAndSendToUser(recipient.toString(), "/queue/messages", envelope);
       }
     }
+  }
+
+  @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
+  public void broadcastNotification(
+      com.relayra.notification.NotificationChangedEventForPush event) {
+    NotificationEventData data = event.data();
+    RealtimeEvent<?> envelope =
+        new RealtimeEvent<>(UUID.randomUUID(), event.type(), Instant.now(), data);
+    messagingTemplate.convertAndSendToUser(
+        event.targetUserId().toString(), "/queue/notifications", envelope);
   }
 }

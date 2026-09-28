@@ -233,10 +233,12 @@ Presence arkadaşlarla sınırlıdır; `/status` arkadaş olmayan ID'leri yanıt
 ## 12. Notifications
 
 ```http
-GET   /api/v1/notifications?limit=50&cursor=...
+GET   /api/v1/notifications?limit=50&beforeCreatedAt=...&beforeId=...
 PATCH /api/v1/notifications/{notificationId}/read
 POST  /api/v1/notifications/read-all
 ```
+
+Bildirim tipleri `FRIEND_REQUEST`, `MENTION`, `REACTION`, `MODERATION`, `SYSTEM` olur. Mention `@kullaniciadi` sözdizimiyle mesaj içeriğinden çözülür (en fazla 20 farklı kullanıcı). Liste ve okuma işlemleri yalnızca oturum sahibinin bildirimlerine erişir; başkası `404` alır. Bildirim oluşturma hatası ana iş akışını bozmaz (`REQUIRES_NEW` + yutma). Yeni bildirimler `/user/queue/notifications` kuyruğuna `NOTIFICATION_CREATED` olayıyla itilir.
 
 ---
 

@@ -13,6 +13,8 @@ import com.relayra.common.error.DomainException;
 import com.relayra.common.error.ErrorCodes;
 import com.relayra.conversation.ConversationService;
 import com.relayra.message.domain.Message;
+import com.relayra.notification.NotificationService;
+import com.relayra.notification.domain.NotificationType;
 import com.relayra.message.persistence.MessageRepository;
 import com.relayra.reaction.domain.MessageReaction;
 import com.relayra.reaction.dto.ReactionEventData;
@@ -45,6 +47,7 @@ public class ReactionService {
   private final PermissionService permissions;
   private final RateLimiter rateLimiter;
   private final ApplicationEventPublisher eventPublisher;
+  private final NotificationService notifications;
 
   public ReactionService(
       MessageReactionRepository reactions,
@@ -55,7 +58,8 @@ public class ReactionService {
       ProfileRepository profiles,
       PermissionService permissions,
       RateLimiter rateLimiter,
-      ApplicationEventPublisher eventPublisher) {
+      ApplicationEventPublisher eventPublisher,
+      NotificationService notifications) {
     this.reactions = reactions;
     this.messages = messages;
     this.channels = channels;
@@ -65,6 +69,7 @@ public class ReactionService {
     this.permissions = permissions;
     this.rateLimiter = rateLimiter;
     this.eventPublisher = eventPublisher;
+    this.notifications = notifications;
   }
 
   @Transactional
@@ -95,6 +100,7 @@ public class ReactionService {
       return summarize(messageId, callerId);
     }
     publish(message, caller, normalized, "REACTION_ADDED");
+    notifyReactionTarget(message, caller, normalized);
     return summarize(messageId, callerId);
   }
 
@@ -168,6 +174,24 @@ public class ReactionService {
       return;
     }
     conversations.requireParticipant(callerId, message.getConversationId());
+  }
+
+  private void notifyReactionTarget(Message message, User actor, String emoji) {
+    try {
+      notifications.notify(
+          message.getAuthorId(),
+          NotificationType.REACTION,
+          actor.getId(),
+          null,
+          message.getChannelId(),
+          message.getConversationId(),
+          message.getId(),
+          null,
+          emoji);
+    } catch (RuntimeException failure) {
+      org.slf4j.LoggerFactory.getLogger(ReactionService.class)
+          .warn("Reaction notification failed: {}", failure.toString());
+    }
   }
 
   private void publish(Message message, User actor, String emoji, String type) {

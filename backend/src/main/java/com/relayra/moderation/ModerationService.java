@@ -16,6 +16,8 @@ import com.relayra.moderation.domain.CommunityBan;
 import com.relayra.moderation.dto.BanRequest;
 import com.relayra.moderation.dto.BanResponse;
 import com.relayra.moderation.persistence.CommunityBanRepository;
+import com.relayra.notification.NotificationService;
+import com.relayra.notification.domain.NotificationType;
 import com.relayra.role.PermissionService;
 import com.relayra.role.domain.Permission;
 import java.time.Duration;
@@ -37,6 +39,7 @@ public class ModerationService {
   private final PermissionService permissions;
   private final RateLimiter rateLimiter;
   private final AuditService audit;
+  private final NotificationService notifications;
 
   public ModerationService(
       CommunityBanRepository bans,
@@ -45,7 +48,8 @@ public class ModerationService {
       UserRepository users,
       PermissionService permissions,
       RateLimiter rateLimiter,
-      AuditService audit) {
+      AuditService audit,
+      NotificationService notifications) {
     this.bans = bans;
     this.communities = communities;
     this.members = members;
@@ -53,6 +57,7 @@ public class ModerationService {
     this.permissions = permissions;
     this.rateLimiter = rateLimiter;
     this.audit = audit;
+    this.notifications = notifications;
   }
 
   @Transactional
@@ -74,6 +79,7 @@ public class ModerationService {
     members.deleteByCommunityIdAndUserId(communityId, targetUserId);
     audit.record(
         communityId, callerId, "KICK", targetUserId, null, "Member was removed from the community.");
+    notifyModerated(targetUserId, callerId, communityId, "You were removed from a community.");
   }
 
   @Transactional
@@ -115,6 +121,11 @@ public class ModerationService {
     CommunityBan saved = bans.saveAndFlush(ban);
     members.deleteByCommunityIdAndUserId(communityId, request.userId());
     audit.record(communityId, callerId, "BAN", request.userId(), saved.getId(), reason);
+    notifyModerated(
+        request.userId(),
+        callerId,
+        communityId,
+        reason == null ? "You were banned from a community." : reason);
     return toResponse(saved);
   }
 
@@ -158,6 +169,16 @@ public class ModerationService {
     if (isBanned(communityId, userId)) {
       throw new DomainException(
           HttpStatus.FORBIDDEN.value(), ErrorCodes.USER_BANNED, "You are banned from this community.");
+    }
+  }
+
+  private void notifyModerated(UUID userId, UUID actorId, UUID communityId, String detail) {
+    try {
+      notifications.notify(
+          userId, NotificationType.MODERATION, actorId, communityId, null, null, null, null, detail);
+    } catch (RuntimeException failure) {
+      org.slf4j.LoggerFactory.getLogger(ModerationService.class)
+          .warn("Moderation notification failed: {}", failure.toString());
     }
   }
 

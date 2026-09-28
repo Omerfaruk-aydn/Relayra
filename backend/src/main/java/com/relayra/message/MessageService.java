@@ -24,6 +24,8 @@ import com.relayra.reaction.domain.MessageReaction;
 import com.relayra.reaction.dto.ReactionResponse;
 import com.relayra.reaction.persistence.MessageReactionRepository;
 import com.relayra.realtime.MessageChangedEvent;
+import com.relayra.notification.NotificationService;
+import com.relayra.notification.domain.NotificationType;
 import com.relayra.audit.AuditService;
 import com.relayra.role.PermissionService;
 import com.relayra.role.domain.Permission;
@@ -53,6 +55,7 @@ public class MessageService {
   private final RateLimiter rateLimiter;
   private final ApplicationEventPublisher eventPublisher;
   private final AuditService audit;
+  private final NotificationService notifications;
 
   public MessageService(
       MessageRepository messages,
@@ -64,7 +67,8 @@ public class MessageService {
       PermissionService permissions,
       RateLimiter rateLimiter,
       ApplicationEventPublisher eventPublisher,
-      AuditService audit) {
+      AuditService audit,
+      NotificationService notifications) {
     this.messages = messages;
     this.messageReactions = messageReactions;
     this.channels = channels;
@@ -75,6 +79,7 @@ public class MessageService {
     this.rateLimiter = rateLimiter;
     this.eventPublisher = eventPublisher;
     this.audit = audit;
+    this.notifications = notifications;
   }
 
   @Transactional
@@ -122,6 +127,8 @@ public class MessageService {
     MessageResponse response =
         toResponse(messages.saveAndFlush(message), caller, displayName(caller));
     eventPublisher.publishEvent(new MessageChangedEvent("MESSAGE_CREATED", response));
+    notifyMentions(
+        caller.getId(), channel.getCommunityId(), channelId, null, message.getId(), message.getContent());
     return response;
   }
 
@@ -169,6 +176,8 @@ public class MessageService {
     MessageResponse response =
         toResponse(messages.saveAndFlush(message), caller, displayName(caller));
     eventPublisher.publishEvent(new MessageChangedEvent("MESSAGE_CREATED", response));
+    notifyMentions(
+        caller.getId(), null, null, conversationId, message.getId(), message.getContent());
     return response;
   }
 
@@ -491,6 +500,33 @@ public class MessageService {
 
   private String displayName(User user) {
     return profiles.findByUserId(user.getId()).map(Profile::getDisplayName).orElse(user.getUsername());
+  }
+
+  private void notifyMentions(
+      UUID authorId,
+      UUID communityId,
+      UUID channelId,
+      UUID conversationId,
+      UUID messageId,
+      String content) {
+    try {
+      for (UUID mentionedId :
+          notifications.parseMentions(content, authorId)) {
+        notifications.notify(
+            mentionedId,
+            NotificationType.MENTION,
+            authorId,
+            communityId,
+            channelId,
+            conversationId,
+            messageId,
+            null,
+            content.length() > 200 ? content.substring(0, 200) : content);
+      }
+    } catch (RuntimeException failure) {
+      org.slf4j.LoggerFactory.getLogger(MessageService.class)
+          .warn("Mention notification failed: {}", failure.toString());
+    }
   }
 
   private DomainException messageNotFound() {

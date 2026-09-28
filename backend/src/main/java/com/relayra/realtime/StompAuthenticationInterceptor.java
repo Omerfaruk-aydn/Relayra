@@ -158,7 +158,8 @@ public class StompAuthenticationInterceptor implements ChannelInterceptor {
   private void authorizeSubscription(UUID userId, String destination, String sessionId) {
     if ("/user/queue/acks".equals(destination)
         || "/user/queue/errors".equals(destination)
-        || "/user/queue/messages".equals(destination)) {
+        || "/user/queue/messages".equals(destination)
+        || "/user/queue/notifications".equals(destination)) {
       return;
     }
     Matcher presence = destination == null ? null : PRESENCE_TOPIC.matcher(destination);

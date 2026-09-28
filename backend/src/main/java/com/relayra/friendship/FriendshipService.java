@@ -22,6 +22,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 import java.util.stream.Collectors;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
@@ -35,18 +36,21 @@ public class FriendshipService {
   private final FriendshipRepository friendships;
   private final UserBlockRepository blocks;
   private final RateLimiter rateLimiter;
+  private final ApplicationEventPublisher eventPublisher;
 
   public FriendshipService(
       UserRepository users,
       ProfileRepository profiles,
       FriendshipRepository friendships,
       UserBlockRepository blocks,
-      RateLimiter rateLimiter) {
+      RateLimiter rateLimiter,
+      ApplicationEventPublisher eventPublisher) {
     this.users = users;
     this.profiles = profiles;
     this.friendships = friendships;
     this.blocks = blocks;
     this.rateLimiter = rateLimiter;
+    this.eventPublisher = eventPublisher;
   }
 
   @Transactional(readOnly = true)
@@ -131,6 +135,8 @@ public class FriendshipService {
             ErrorCodes.USER_BLOCKED,
             "Friend request is not allowed.");
       }
+      eventPublisher.publishEvent(
+          new FriendRequestEvent(saved.getId(), caller.getId(), receiver.getId()));
       return toResponse(saved);
     } catch (DataIntegrityViolationException e) {
       throw new DomainException(
