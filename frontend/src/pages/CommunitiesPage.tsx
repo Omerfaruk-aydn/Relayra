@@ -1,13 +1,32 @@
 import { useState } from "react";
+import { useAuth } from "../auth/AuthContext";
 import { PageHeader, SearchInput } from "../components/chrome";
-import { MOCK_COMMUNITIES } from "../lib/mock-data";
+import { apiGet } from "../lib/api";
+import { StatusBlock, useAsync } from "../lib/async";
 import { initials } from "../lib/format";
 
+interface Community {
+  id: string;
+  ownerId: string;
+  name: string;
+  description: string;
+  iconKey: string | null;
+  memberCount: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
 export function CommunitiesPage() {
+  const { accessToken: token } = useAuth();
   const [query, setQuery] = useState("");
+  const communities = useAsync(
+    () => (token ? apiGet<Community[]>("/api/v1/communities", token) : Promise.resolve(null)),
+    [token],
+  );
   const q = query.trim().toLowerCase();
-  const featured = MOCK_COMMUNITIES.filter(
-    (c) => !q || `${c.name} ${c.description}`.toLowerCase().includes(q),
+  const filtered = (communities.data ?? []).filter(
+    (community) =>
+      !q || `${community.name} ${community.description}`.toLowerCase().includes(q),
   );
 
   return (
@@ -16,66 +35,57 @@ export function CommunitiesPage() {
       <div className="app-content">
         <div className="stack">
           <SearchInput value={query} onChange={setQuery} placeholder="Search communities..." />
-          <div>
-            <h3 style={{ margin: "4px 0 12px" }}>Featured Communities</h3>
-            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(260px, 1fr))", gap: 12 }}>
-              {featured.map((c) => (
-                <div key={c.id} className="card">
-                  <div className="row-between" style={{ marginBottom: 8 }}>
-                    <span
-                      aria-hidden="true"
-                      style={{
-                        width: 40,
-                        height: 40,
-                        borderRadius: 10,
-                        background: "var(--accent-primary)",
-                        display: "inline-flex",
-                        alignItems: "center",
-                        justifyContent: "center",
-                        fontWeight: 800,
-                      }}
-                    >
-                      {initials(c.name)}
-                    </span>
-                    {c.joined ? (
-                      <span style={{ fontSize: 12, color: "var(--success)", fontWeight: 700 }}>Joined</span>
-                    ) : (
-                      <button className="auth-btn-primary" style={{ width: "auto", padding: "6px 16px" }}>
-                        Join
-                      </button>
-                    )}
-                  </div>
-                  <h3>{c.name}</h3>
-                  <p style={{ margin: "4px 0 8px" }}>{c.description}</p>
-                  <div style={{ fontSize: 12, color: "var(--text-muted)" }}>
-                    {c.members.toLocaleString()} members · {c.tags.join(" · ")}
-                  </div>
+          {communities.status !== "ready" ? (
+            <StatusBlock
+              status={communities.status}
+              error={communities.error}
+              offline={communities.offline}
+              onRetry={communities.reload}
+              emptyTitle="No communities yet"
+              emptyHint="Communities you join or create will appear here."
+              loadingLabel="Loading communities"
+            />
+          ) : (
+            <div>
+              <h3 style={{ margin: "4px 0 12px" }}>My communities</h3>
+              {filtered.length === 0 ? (
+                <div className="empty-state">
+                  <div className="empty-state-mark">○</div>
+                  <h2>No communities found</h2>
+                  <p>Try a different search.</p>
                 </div>
-              ))}
-            </div>
-          </div>
-          <div className="card">
-            <h3>Trending Communities</h3>
-            <p>Popular communities right now</p>
-            <div className="stack" style={{ marginTop: 12 }}>
-              {MOCK_COMMUNITIES.map((c, i) => (
-                <div key={c.id} className="row-between">
-                  <div style={{ display: "flex", gap: 12, alignItems: "center" }}>
-                    <span style={{ color: "var(--text-muted)", width: 20 }}>{i + 1}</span>
-                    <div>
-                      <div style={{ fontWeight: 600 }}>{c.name}</div>
-                      <div style={{ fontSize: 12, color: "var(--text-secondary)" }}>
-                        {c.members.toLocaleString()} members
+              ) : (
+                <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(260px, 1fr))", gap: 12 }}>
+                  {filtered.map((community) => (
+                    <div key={community.id} className="card">
+                      <div className="row-between" style={{ marginBottom: 8 }}>
+                        <span
+                          aria-hidden="true"
+                          style={{
+                            width: 40,
+                            height: 40,
+                            borderRadius: 10,
+                            background: "var(--accent-primary)",
+                            display: "inline-flex",
+                            alignItems: "center",
+                            justifyContent: "center",
+                            fontWeight: 800,
+                          }}
+                        >
+                          {initials(community.name)}
+                        </span>
+                        <span style={{ fontSize: 12, color: "var(--text-muted)", fontWeight: 700 }}>
+                          {community.memberCount.toLocaleString()} members
+                        </span>
                       </div>
+                      <h3>{community.name}</h3>
+                      <p style={{ margin: "4px 0 8px" }}>{community.description}</p>
                     </div>
-                  </div>
-                  <button className="auth-btn-ghost" style={{ width: "auto", padding: "6px 16px" }}>
-                    Join
-                  </button>
+                  ))}
                 </div>
-              ))}
+              )}
             </div>
-          </div>
+          )}
         </div>
       </div>
     </>

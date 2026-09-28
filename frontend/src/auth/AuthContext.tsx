@@ -24,7 +24,11 @@ function readStoredSession(): { user: UserSummary; accessToken: string; expiresA
       return null;
     }
     const parsed = JSON.parse(raw) as { user: UserSummary; accessToken: string; expiresAt: number };
-    if (!parsed.accessToken || !parsed.user) {
+    if (!parsed.accessToken || !parsed.user || typeof parsed.expiresAt !== "number") {
+      return null;
+    }
+    if (parsed.expiresAt <= Date.now()) {
+      sessionStorage.removeItem("relayra.session");
       return null;
     }
     return parsed;
@@ -133,10 +137,24 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     if (!accessToken) {
       return;
     }
-    apiGet<UserSummary>("/api/v1/auth/me", accessToken).then(setUser).catch(() => {
-      void refresh();
-    });
-  }, [accessToken, refresh]);
+    let cancelled = false;
+    apiGet<UserSummary>("/api/v1/auth/me", accessToken)
+      .then((me) => {
+        if (!cancelled) {
+          setUser(me);
+        }
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setUser(null);
+          setAccessToken(null);
+          setExpiresAt(null);
+        }
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [accessToken]);
 
   const value = useMemo<AuthState>(
     () => ({ user, accessToken, expiresAt, loading, error, login, register, logout, refresh }),

@@ -3,8 +3,8 @@ import { useAuth } from "../auth/AuthContext";
 
 const NAV = [
   { to: "/", label: "Home", mark: "H" },
-  { to: "/channels/product-design", label: "Channel", mark: "#" },
-  { to: "/dm/sarah", label: "Direct messages", mark: "✉" },
+  { to: "/communities", label: "Chat", mark: "#" },
+  { to: "/friends", label: "Direct messages", mark: "✉" },
   { to: "/friends", label: "Friends", mark: "F" },
   { to: "/search", label: "Search", mark: "⌕" },
   { to: "/notifications", label: "Notifications", mark: "🔔" },
@@ -46,8 +46,7 @@ export function AppShell() {
       <aside className="app-context" aria-label="Context">
         <div className="app-context-title">Workspace</div>
         <NavLink
-          to="/"
-          end
+          to="/communities"
           className={({ isActive }) => `app-context-item${isActive ? " app-context-item-active" : ""}`}
         >
           # general
@@ -124,7 +123,7 @@ export function AppShell() {
       <aside className="app-inspector" aria-label="Inspector">
         <div className="card">
           <h3>Getting started</h3>
-          <p>Communities, channels, and direct messages light up here as backend phases land.</p>
+          <p>Select a community to open members, invites, roles, moderation, and chat.</p>
         </div>
       </aside>
     </div>

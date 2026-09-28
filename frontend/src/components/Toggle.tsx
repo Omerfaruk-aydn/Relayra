@@ -4,17 +4,26 @@ interface ToggleProps {
   label: string;
   description?: string;
   defaultOn?: boolean;
+  checked?: boolean;
+  disabled?: boolean;
+  onChange?: (checked: boolean) => void;
 }
 
-export function Toggle({ label, description, defaultOn = false }: ToggleProps) {
-  const [on, setOn] = useState(defaultOn);
+export function Toggle({ label, description, defaultOn = false, checked, disabled = false, onChange }: ToggleProps) {
+  const [internalOn, setInternalOn] = useState(defaultOn);
+  const on = checked ?? internalOn;
   return (
     <button
       type="button"
       role="switch"
       aria-checked={on}
       aria-label={label}
-      onClick={() => setOn((v) => !v)}
+      disabled={disabled}
+      onClick={() => {
+        const next = !on;
+        if (checked === undefined) setInternalOn(next);
+        onChange?.(next);
+      }}
       style={{
         display: "flex",
         alignItems: "center",

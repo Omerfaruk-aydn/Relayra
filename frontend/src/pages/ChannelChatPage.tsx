@@ -1,81 +1,168 @@
 import { useState } from "react";
+import { useParams } from "react-router-dom";
+import { useAuth } from "../auth/AuthContext";
 import { Avatar } from "../components/Avatar";
-import { MOCK_CHANNELS, MOCK_MESSAGES, MOCK_USERS } from "../lib/mock-data";
+import { apiGet, apiPost, apiPut } from "../lib/api";
+import { StatusBlock, toMessage, useAsync } from "../lib/async";
 
-function author(id: string) {
-  return MOCK_USERS.find((u) => u.id === id) ?? MOCK_USERS[0];
+interface Reaction {
+  messageId: string;
+  emoji: string;
+  count: number;
+  mine: boolean;
+}
+
+interface Message {
+  id: string;
+  author: {
+    userId: string;
+    username: string;
+    displayName: string;
+  };
+  content: string;
+  reactions: Reaction[];
+  createdAt: string;
+  editedAt: string | null;
+  deletedAt: string | null;
+}
+
+interface MessagePage {
+  messages: Message[];
+  nextBeforeCreatedAt: string | null;
+  nextBeforeId: string | null;
+}
+
+function shortId(id: string) {
+  return id.slice(0, 8);
 }
 
 export function ChannelChatPage() {
+  const { channelId } = useParams<{ channelId: string }>();
+  const { accessToken: token } = useAuth();
   const [draft, setDraft] = useState("");
-  const channel = MOCK_CHANNELS[1];
-  const members = MOCK_USERS.slice(0, 8);
+  const [sending, setSending] = useState(false);
+  const [actionError, setActionError] = useState<string | null>(null);
+  const messages = useAsync(
+    () => {
+      if (!token || !channelId) return Promise.resolve(null);
+      return apiGet<MessagePage>(`/api/v1/channels/${channelId}/messages?limit=50`, token);
+    },
+    [token, channelId],
+  );
+
+  async function sendMessage() {
+    const content = draft.trim();
+    if (!token || !channelId || !content || sending) return;
+    setSending(true);
+    setActionError(null);
+    try {
+      await apiPost(`/api/v1/channels/${channelId}/messages`, { clientMessageId: crypto.randomUUID(), content }, token);
+      setDraft("");
+      messages.reload();
+    } catch (error) {
+      setActionError(toMessage(error, "Could not send the message."));
+    } finally {
+      setSending(false);
+    }
+  }
+
+  async function addReaction(messageId: string, emoji: string) {
+    if (!token) return;
+    setActionError(null);
+    try {
+      await apiPut(`/api/v1/messages/${messageId}/reactions/${encodeURIComponent(emoji)}`, {}, token);
+      messages.reload();
+    } catch (error) {
+      setActionError(toMessage(error, "Could not update the reaction."));
+    }
+  }
+
+  const items = messages.data?.messages ?? [];
+  const channelLabel = channelId ? shortId(channelId) : "channel";
 
   return (
     <>
       <div className="app-topbar">
         <div style={{ flex: 1, minWidth: 0 }}>
-          <h1># {channel.name}</h1>
-          <div className="app-topbar-sub">{channel.topic}</div>
+          <h1># {channelLabel}</h1>
+          <div className="app-topbar-sub">Channel conversation</div>
         </div>
-        <span style={{ fontSize: 12, color: "var(--text-muted)" }}>
-          {channel.members.toLocaleString()} members
-        </span>
       </div>
       <div className="app-content" style={{ display: "grid", gridTemplateColumns: "minmax(0, 1fr) 260px", gap: 16 }}>
         <div className="stack">
-          {MOCK_MESSAGES.map((m) => {
-            const a = author(m.authorId);
+          {actionError && <div className="auth-alert" role="alert">{actionError}</div>}
+          {messages.status !== "ready" ? (
+            <StatusBlock
+              status={messages.status}
+              error={messages.error}
+              offline={messages.offline}
+              onRetry={messages.reload}
+              emptyTitle="No messages yet — say hello"
+              emptyHint="Start this channel's conversation."
+              loadingLabel="Loading messages"
+            />
+          ) : items.length === 0 ? (
+            <div className="empty-state"><h2>No messages yet — say hello</h2></div>
+          ) : items.map((message) => {
+            const authorName = message.author.displayName || message.author.username;
             return (
-              <div key={m.id} style={{ display: "flex", gap: 12 }}>
-                <Avatar id={a.id} name={a.name} size={40} />
+              <div key={message.id} style={{ display: "flex", gap: 12 }}>
+                <Avatar id={message.author.userId} name={authorName} size={40} />
                 <div style={{ minWidth: 0, flex: 1 }}>
                   <div style={{ display: "flex", gap: 8, alignItems: "baseline" }}>
-                    <strong style={{ fontSize: 14 }}>{a.name}</strong>
-                    <span style={{ fontSize: 11, color: "var(--text-muted)" }}>{m.time}</span>
+                    <strong style={{ fontSize: 14 }}>{authorName}</strong>
+                    <span style={{ fontSize: 11, color: "var(--text-muted)" }}>{new Date(message.createdAt).toLocaleString()}</span>
                   </div>
-                  <p style={{ margin: "4px 0 8px", fontSize: 14 }}>{m.content}</p>
-                  <div style={{ display: "flex", gap: 6 }}>
-                    {m.reactions.map((r) => (
-                      <span
-                        key={r.emoji}
-                        style={{
-                          fontSize: 12,
-                          border: "1px solid var(--border-subtle)",
-                          borderRadius: 999,
-                          padding: "2px 8px",
-                          background: "var(--bg-card)",
-                        }}
-                      >
-                        {r.emoji} {r.count}
-                      </span>
-                    ))}
-                  </div>
+                  {message.deletedAt ? (
+                    <p style={{ margin: "4px 0 8px", fontSize: 14 }}><em>Message deleted</em></p>
+                  ) : (
+                    <p style={{ margin: "4px 0 8px", fontSize: 14 }}>{message.content}</p>
+                  )}
+                  {!message.deletedAt && (
+                    <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+                      {message.reactions.map((reaction) => (
+                        <button
+                          key={reaction.emoji}
+                          type="button"
+                          onClick={() => void addReaction(message.id, reaction.emoji)}
+                          aria-label={`${reaction.mine ? "Add another" : "Add"} ${reaction.emoji} reaction`}
+                          style={{ fontSize: 12, border: "1px solid var(--border-subtle)", borderRadius: 999, padding: "2px 8px", background: "var(--bg-card)" }}
+                        >
+                          {reaction.emoji} {reaction.count}
+                        </button>
+                      ))}
+                      {["➕", "❤️"].map((emoji) => (
+                        <button
+                          key={emoji}
+                          type="button"
+                          onClick={() => void addReaction(message.id, emoji)}
+                          aria-label={`Add ${emoji} reaction`}
+                          style={{ fontSize: 12, border: "1px solid var(--border-subtle)", borderRadius: 999, padding: "2px 8px", background: "var(--bg-card)" }}
+                        >
+                          {emoji}
+                        </button>
+                      ))}
+                    </div>
+                  )}
                 </div>
               </div>
             );
           })}
-          <div className="auth-input-wrap" style={{ marginTop: 8 }}>
+          <form className="auth-input-wrap" style={{ marginTop: 8 }} onSubmit={(event) => { event.preventDefault(); void sendMessage(); }}>
             <input
               className="auth-input"
               value={draft}
-              onChange={(e) => setDraft(e.target.value)}
-              placeholder={`Message #${channel.name}...`}
-              aria-label={`Message #${channel.name}`}
+              onChange={(event) => setDraft(event.target.value)}
+              placeholder={`Message #${channelLabel}...`}
+              aria-label={`Message #${channelLabel}`}
+              disabled={sending || !channelId}
             />
-          </div>
+          </form>
         </div>
         <div className="stack">
           <div className="card">
-            <h3>Members · {members.length}</h3>
-            <div className="stack" style={{ marginTop: 12 }}>
-              {members.map((u) => (
-                <div key={u.id} style={{ display: "flex", gap: 8, alignItems: "center", fontSize: 13 }}>
-                  <Avatar id={u.id} name={u.name} size={28} presence={u.presence} />
-                  <span>{u.name}</span>
-                </div>
-              ))}
-            </div>
+            <h3>Channel info</h3>
+            <p style={{ marginTop: 12 }}>ID · {channelLabel}</p>
           </div>
           <div className="card">
             <h3>Pinned</h3>

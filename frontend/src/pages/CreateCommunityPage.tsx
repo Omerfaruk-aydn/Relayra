@@ -1,5 +1,9 @@
 import { useState } from "react";
+import { useNavigate } from "react-router-dom";
+import { useAuth } from "../auth/AuthContext";
 import { PageHeader } from "../components/chrome";
+import { apiPost } from "../lib/api";
+import { toMessage } from "../lib/async";
 
 const STEPS = ["Basic information", "Visibility & access", "Default channels", "Review"];
 
@@ -8,6 +12,24 @@ export function CreateCommunityPage() {
   const [name, setName] = useState("Relayra Design Community");
   const [description, setDescription] = useState("");
   const [visibility, setVisibility] = useState("Public");
+  const [submitting, setSubmitting] = useState(false);
+  const [submitError, setSubmitError] = useState<string | null>(null);
+  const { accessToken: token } = useAuth();
+  const navigate = useNavigate();
+
+  async function createCommunity() {
+    if (!token || submitting) return;
+    setSubmitting(true);
+    setSubmitError(null);
+    try {
+      await apiPost("/api/v1/communities", { name: name.trim(), description: description.trim() }, token);
+      navigate("/communities");
+    } catch (error) {
+      setSubmitError(toMessage(error, "Could not create the community."));
+    } finally {
+      setSubmitting(false);
+    }
+  }
 
   return (
     <>
@@ -76,6 +98,7 @@ export function CreateCommunityPage() {
                 <p style={{ color: "var(--text-secondary)", fontSize: 13 }}>
                   By creating a community, you agree to Relayra&apos;s Community Guidelines and Terms of Service.
                 </p>
+                {submitError && <p role="alert" style={{ color: "var(--danger)" }}>{submitError}</p>}
               </div>
             )}
             <div className="row-between" style={{ marginTop: 16 }}>
@@ -87,8 +110,13 @@ export function CreateCommunityPage() {
                   Continue
                 </button>
               ) : (
-                <button className="auth-btn-primary" style={{ width: "auto", padding: "8px 20px" }}>
-                  Create Community
+                <button
+                  className="auth-btn-primary"
+                  style={{ width: "auto", padding: "8px 20px" }}
+                  disabled={submitting || !name.trim()}
+                  onClick={() => void createCommunity()}
+                >
+                  {submitting ? "Creating..." : "Create Community"}
                 </button>
               )}
             </div>
