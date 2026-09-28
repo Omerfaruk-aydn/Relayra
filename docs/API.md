@@ -191,7 +191,10 @@ Reaction:
 ```http
 PUT    /api/v1/messages/{messageId}/reactions/{emoji}
 DELETE /api/v1/messages/{messageId}/reactions/{emoji}
+GET    /api/v1/messages/{messageId}/reactions
 ```
+
+Aynı kullanıcı aynı emojiyi bir kez ekleyebilir; tekrar ekleme ve olmayanı silme idempotent'tir. Emoji NFC ile normalize edilir, en fazla 16 Unicode karakteri kabul edilir ve görünür içerik içermelidir. Silinmiş mesaja reaction `409 MESSAGE_DELETED` döner; mesaj kapsamına erişemeyen kullanıcı `403` (kanal) veya `404` (DM) alır. DM'de block sonrası reaction eklenemez, kaldırılamaz ve yayınlanmaz; geçmiş okuma açıktır. Reaction değişimleri `REACTION_ADDED` / `REACTION_REMOVED` olayı olarak kanal konusuna ve DM katılımcılarının `/user/queue/messages` kuyruğuna yayınlanır; mesaj geçmişi her mesajda `reactions` özetini içerir.
 
 ---
 

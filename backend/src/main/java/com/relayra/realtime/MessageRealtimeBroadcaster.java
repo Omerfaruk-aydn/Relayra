@@ -1,6 +1,7 @@
 package com.relayra.realtime;
 
 import com.relayra.conversation.ConversationService;
+import com.relayra.reaction.dto.ReactionEventData;
 import com.relayra.realtime.dto.RealtimeEvent;
 import java.time.Instant;
 import java.util.List;
@@ -39,6 +40,27 @@ public class MessageRealtimeBroadcaster {
     List<UUID> recipients = conversations.participantIds(event.data().conversationId());
     for (UUID recipient : recipients) {
       if (conversations.canDeliver(senderId, recipient)) {
+        messagingTemplate.convertAndSendToUser(recipient.toString(), "/queue/messages", envelope);
+      }
+    }
+  }
+
+  @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
+  public void broadcastReaction(ReactionChangedEvent event) {
+    ReactionEventData data = event.data();
+    RealtimeEvent<?> envelope =
+        new RealtimeEvent<>(UUID.randomUUID(), event.type(), Instant.now(), data);
+    if (data.channelId() != null) {
+      messagingTemplate.convertAndSend(
+          "/topic/channels/" + data.channelId() + "/messages", envelope);
+      return;
+    }
+    if (data.conversationId() == null) {
+      return;
+    }
+    List<UUID> recipients = conversations.participantIds(data.conversationId());
+    for (UUID recipient : recipients) {
+      if (conversations.canDeliver(data.user().id(), recipient)) {
         messagingTemplate.convertAndSendToUser(recipient.toString(), "/queue/messages", envelope);
       }
     }

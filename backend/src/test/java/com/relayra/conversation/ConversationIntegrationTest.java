@@ -142,6 +142,16 @@ class ConversationIntegrationTest {
                 .headers(auth(first)))
         .andExpect(status().isForbidden())
         .andExpect(jsonPath("$.code").value("USER_BLOCKED"));
+    mockMvc
+        .perform(
+            org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put(
+                    "/api/v1/messages/{messageId}/reactions/{emoji}", messageId, "👍")
+                .headers(auth(first)))
+        .andExpect(status().isForbidden())
+        .andExpect(jsonPath("$.code").value("USER_BLOCKED"));
+    mockMvc
+        .perform(get("/api/v1/messages/" + messageId + "/reactions").headers(auth(first)))
+        .andExpect(status().isOk());
   }
 
   @Test

@@ -20,6 +20,9 @@ import com.relayra.message.dto.MessagePageResponse;
 import com.relayra.message.dto.MessageResponse;
 import com.relayra.message.dto.SendMessageRequest;
 import com.relayra.message.persistence.MessageRepository;
+import com.relayra.reaction.domain.MessageReaction;
+import com.relayra.reaction.dto.ReactionResponse;
+import com.relayra.reaction.persistence.MessageReactionRepository;
 import com.relayra.realtime.MessageChangedEvent;
 import com.relayra.role.PermissionService;
 import com.relayra.role.domain.Permission;
@@ -40,6 +43,7 @@ import org.springframework.transaction.annotation.Transactional;
 public class MessageService {
 
   private final MessageRepository messages;
+  private final MessageReactionRepository messageReactions;
   private final ChannelRepository channels;
   private final ConversationService conversations;
   private final UserRepository users;
@@ -50,6 +54,7 @@ public class MessageService {
 
   public MessageService(
       MessageRepository messages,
+      MessageReactionRepository messageReactions,
       ChannelRepository channels,
       ConversationService conversations,
       UserRepository users,
@@ -58,6 +63,7 @@ public class MessageService {
       RateLimiter rateLimiter,
       ApplicationEventPublisher eventPublisher) {
     this.messages = messages;
+    this.messageReactions = messageReactions;
     this.channels = channels;
     this.conversations = conversations;
     this.users = users;
@@ -174,7 +180,8 @@ public class MessageService {
     validateCursor(beforeCreatedAt, beforeId);
     return messagePage(
         messages.findConversationHistory(
-            conversationId, beforeCreatedAt, beforeId, pageRequest(limit)));
+            conversationId, beforeCreatedAt, beforeId, pageRequest(limit)),
+        callerId);
   }
 
   @Transactional(readOnly = true)
@@ -191,7 +198,7 @@ public class MessageService {
     List<Message> page =
         messages.findChannelHistory(
             channelId, beforeCreatedAt, beforeId, pageRequest(limit));
-    return messagePage(page);
+    return messagePage(page, callerId);
   }
 
   private PageRequest pageRequest(Integer limit) {
@@ -215,12 +222,22 @@ public class MessageService {
   }
 
   private MessagePageResponse messagePage(List<Message> page) {
+    return messagePage(page, null);
+  }
+
+  private MessagePageResponse messagePage(List<Message> page, UUID viewerId) {
     Map<UUID, User> authors =
         users.findAllById(page.stream().map(Message::getAuthorId).distinct().toList()).stream()
             .collect(Collectors.toMap(User::getId, user -> user));
     Map<UUID, String> displayNames =
         profiles.findByUserIdIn(List.copyOf(authors.keySet())).stream()
             .collect(Collectors.toMap(Profile::getUserId, Profile::getDisplayName));
+    Map<UUID, List<MessageReaction>> reactionsByMessage =
+        page.isEmpty()
+            ? Map.of()
+            : messageReactions.findByMessageIdIn(page.stream().map(Message::getId).distinct().toList())
+                .stream()
+                .collect(Collectors.groupingBy(MessageReaction::getMessageId));
     List<MessageResponse> responses =
         page.stream()
             .map(
@@ -232,7 +249,9 @@ public class MessageService {
                   return toResponse(
                       message,
                       author,
-                      displayNames.getOrDefault(message.getAuthorId(), author.getUsername()));
+                      displayNames.getOrDefault(message.getAuthorId(), author.getUsername()),
+                      viewerId == null ? author.getId() : viewerId,
+                      reactionsByMessage.getOrDefault(message.getId(), List.of()));
                 })
             .toList();
     Message last = page.isEmpty() ? null : page.get(page.size() - 1);
@@ -467,6 +486,20 @@ public class MessageService {
   }
 
   private MessageResponse toResponse(Message message, User author, String displayName) {
+    return toResponse(
+        message,
+        author,
+        displayName,
+        author.getId(),
+        messageReactions.findByMessageId(message.getId()));
+  }
+
+  private MessageResponse toResponse(
+      Message message,
+      User author,
+      String displayName,
+      UUID viewerId,
+      List<MessageReaction> reactions) {
     return new MessageResponse(
         message.getId(),
         message.getClientMessageId(),
@@ -476,8 +509,27 @@ public class MessageService {
         message.getContent(),
         message.getType(),
         message.getReplyToMessageId(),
+        reactionSummary(message.getId(), viewerId, reactions),
         message.getCreatedAt(),
         message.getEditedAt(),
         message.getDeletedAt());
+  }
+
+  private List<ReactionResponse> reactionSummary(
+      UUID messageId, UUID viewerId, List<MessageReaction> reactions) {
+    return reactions.stream()
+        .collect(Collectors.groupingBy(MessageReaction::getEmoji))
+        .entrySet()
+        .stream()
+        .map(
+            entry ->
+                new ReactionResponse(
+                    messageId,
+                    entry.getKey(),
+                    entry.getValue().size(),
+                    entry.getValue().stream()
+                        .anyMatch(reaction -> reaction.getUserId().equals(viewerId))))
+        .sorted((first, second) -> first.emoji().compareTo(second.emoji()))
+        .toList();
   }
 }
