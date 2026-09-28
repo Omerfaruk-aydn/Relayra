@@ -12,6 +12,11 @@ import { FriendRequestsPage } from "./pages/FriendRequestsPage";
 import { AddFriendsPage } from "./pages/AddFriendsPage";
 import { BlockedUsersPage } from "./pages/BlockedUsersPage";
 import { CommunitiesPage } from "./pages/CommunitiesPage";
+import { CreateCommunityPage } from "./pages/CreateCommunityPage";
+import { JoinCommunityPage } from "./pages/JoinCommunityPage";
+import { CommunitySettingsPage } from "./pages/CommunitySettingsPage";
+import { CommunityMembersPage } from "./pages/CommunityMembersPage";
+import { CommunityInvitesPage } from "./pages/CommunityInvitesPage";
 import { SettingsPage } from "./pages/SettingsPage";
 import "./styles/tokens.css";
 import "./styles/app.css";
@@ -36,6 +41,11 @@ const router = createBrowserRouter([
           { path: "/friends/add", element: <AddFriendsPage /> },
           { path: "/friends/blocked", element: <BlockedUsersPage /> },
           { path: "/communities", element: <CommunitiesPage /> },
+          { path: "/communities/create", element: <CreateCommunityPage /> },
+          { path: "/communities/join", element: <JoinCommunityPage /> },
+          { path: "/communities/settings", element: <CommunitySettingsPage /> },
+          { path: "/communities/members", element: <CommunityMembersPage /> },
+          { path: "/communities/invites", element: <CommunityInvitesPage /> },
           { path: "/settings", element: <SettingsPage /> },
         ],
       },

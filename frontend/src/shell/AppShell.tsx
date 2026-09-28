@@ -75,6 +75,36 @@ export function AppShell() {
         >
           Communities
         </NavLink>
+        <NavLink
+          to="/communities/create"
+          className={({ isActive }) => `app-context-item${isActive ? " app-context-item-active" : ""}`}
+        >
+          Create community
+        </NavLink>
+        <NavLink
+          to="/communities/join"
+          className={({ isActive }) => `app-context-item${isActive ? " app-context-item-active" : ""}`}
+        >
+          Join community
+        </NavLink>
+        <NavLink
+          to="/communities/members"
+          className={({ isActive }) => `app-context-item${isActive ? " app-context-item-active" : ""}`}
+        >
+          Members
+        </NavLink>
+        <NavLink
+          to="/communities/invites"
+          className={({ isActive }) => `app-context-item${isActive ? " app-context-item-active" : ""}`}
+        >
+          Invites
+        </NavLink>
+        <NavLink
+          to="/communities/settings"
+          className={({ isActive }) => `app-context-item${isActive ? " app-context-item-active" : ""}`}
+        >
+          Community settings
+        </NavLink>
         <div className="app-context-title">Account</div>
         <div className="app-context-item">
           <span className="presence-dot presence-online" />
