@@ -19,6 +19,7 @@ import com.relayra.message.dto.MessagePageResponse;
 import com.relayra.message.dto.MessageResponse;
 import com.relayra.message.dto.SendMessageRequest;
 import com.relayra.message.persistence.MessageRepository;
+import com.relayra.realtime.MessageChangedEvent;
 import com.relayra.role.PermissionService;
 import com.relayra.role.domain.Permission;
 import java.time.Duration;
@@ -29,6 +30,7 @@ import java.util.Map;
 import java.util.UUID;
 import java.util.stream.Collectors;
 import org.springframework.data.domain.PageRequest;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -42,6 +44,7 @@ public class MessageService {
   private final ProfileRepository profiles;
   private final PermissionService permissions;
   private final RateLimiter rateLimiter;
+  private final ApplicationEventPublisher eventPublisher;
 
   public MessageService(
       MessageRepository messages,
@@ -49,13 +52,15 @@ public class MessageService {
       UserRepository users,
       ProfileRepository profiles,
       PermissionService permissions,
-      RateLimiter rateLimiter) {
+      RateLimiter rateLimiter,
+      ApplicationEventPublisher eventPublisher) {
     this.messages = messages;
     this.channels = channels;
     this.users = users;
     this.profiles = profiles;
     this.permissions = permissions;
     this.rateLimiter = rateLimiter;
+    this.eventPublisher = eventPublisher;
   }
 
   @Transactional
@@ -100,7 +105,10 @@ public class MessageService {
             content,
             MessageType.TEXT,
             clientMessageId);
-    return toResponse(messages.saveAndFlush(message), caller, displayName(caller));
+    MessageResponse response =
+        toResponse(messages.saveAndFlush(message), caller, displayName(caller));
+    eventPublisher.publishEvent(new MessageChangedEvent("MESSAGE_CREATED", response));
+    return response;
   }
 
   @Transactional(readOnly = true)
@@ -186,7 +194,10 @@ public class MessageService {
     }
     message.edit(normalizeContent(request.content()));
     User author = requireUser(message.getAuthorId());
-    return toResponse(messages.saveAndFlush(message), author, displayName(author));
+    MessageResponse response =
+        toResponse(messages.saveAndFlush(message), author, displayName(author));
+    eventPublisher.publishEvent(new MessageChangedEvent("MESSAGE_UPDATED", response));
+    return response;
   }
 
   @Transactional
@@ -206,6 +217,10 @@ public class MessageService {
     }
     message.softDelete();
     messages.flush();
+    User author = requireUser(message.getAuthorId());
+    eventPublisher.publishEvent(
+        new MessageChangedEvent(
+            "MESSAGE_DELETED", toResponse(message, author, displayName(author))));
   }
 
   private User requireActiveUser(UUID userId) {

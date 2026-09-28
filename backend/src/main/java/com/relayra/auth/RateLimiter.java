@@ -11,10 +11,15 @@ public class RateLimiter {
   private record Bucket(AtomicLong count, long windowStartMillis) {}
 
   private final ConcurrentHashMap<String, Bucket> buckets = new ConcurrentHashMap<>();
+  private final AtomicLong checks = new AtomicLong();
 
   public void check(String key, int maxPerWindow, Duration window) {
     long now = System.currentTimeMillis();
     long windowMillis = window.toMillis();
+    if ((checks.incrementAndGet() & 1023) == 0) {
+      long oldestRelevant = now - Duration.ofHours(24).toMillis();
+      buckets.entrySet().removeIf(entry -> entry.getValue().windowStartMillis() < oldestRelevant);
+    }
     Bucket bucket =
         buckets.compute(
             key,
