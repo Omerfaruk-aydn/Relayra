@@ -199,6 +199,7 @@ Baseline rate limitler (ayarlanabilir):
 - message send: 30/dakika/kullanıcı
 - typing: 60/dakika/kullanıcı
 - invite create: 20/saat/kullanıcı
+- invite resolve/join preview: 60/dakika/kullanıcı
 - upload: 20/saat/kullanıcı
 
 Limit aşımı `429 RATE_LIMITED` + `Retry-After` döner.
