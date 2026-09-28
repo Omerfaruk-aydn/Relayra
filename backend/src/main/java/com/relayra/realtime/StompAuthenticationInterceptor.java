@@ -35,6 +35,12 @@ public class StompAuthenticationInterceptor implements ChannelInterceptor {
 
   private static final Pattern CHANNEL_MESSAGES_TOPIC =
       Pattern.compile("^/topic/channels/([0-9a-fA-F-]{36})/messages$");
+  private static final Pattern CHANNEL_TYPING_TOPIC =
+      Pattern.compile("^/topic/channels/([0-9a-fA-F-]{36})/typing$");
+  private static final Pattern PRESENCE_TOPIC =
+      Pattern.compile("^/topic/presence/([0-9a-fA-F-]{36})$");
+  private static final Pattern CHANNEL_TYPING_SEND =
+      Pattern.compile("^/app/channels/([0-9a-fA-F-]{36})/typing$");
   private static final Pattern CHANNEL_MESSAGES_SEND =
       Pattern.compile("^/app/channels/([0-9a-fA-F-]{36})/messages$");
   static final String TOKEN_SESSION_KEY = "relayra.accessToken";
@@ -80,7 +86,7 @@ public class StompAuthenticationInterceptor implements ChannelInterceptor {
     }
     UUID userId = requireUser(accessor);
     if (command == StompCommand.SUBSCRIBE) {
-      authorizeSubscription(userId, accessor.getDestination());
+      authorizeSubscription(userId, accessor.getDestination(), accessor.getSessionId());
       trackSubscription(accessor);
     } else if (command == StompCommand.UNSUBSCRIBE) {
       untrackSubscription(accessor);
@@ -143,18 +149,37 @@ public class StompAuthenticationInterceptor implements ChannelInterceptor {
     return userId;
   }
 
-  private void authorizeSubscription(UUID userId, String destination) {
+  private void authorizeSubscription(UUID userId, String destination, String sessionId) {
     if ("/user/queue/acks".equals(destination) || "/user/queue/errors".equals(destination)) {
       return;
     }
-    Matcher matcher = destination == null ? null : CHANNEL_MESSAGES_TOPIC.matcher(destination);
-    if (matcher == null || !matcher.matches()) {
+    Matcher presence = destination == null ? null : PRESENCE_TOPIC.matcher(destination);
+    if (presence != null && presence.matches()) {
+      UUID targetId = parseUuid(presence.group(1));
+      if (!targetId.equals(userId)) {
+        throw new DomainException(
+            HttpStatus.FORBIDDEN.value(),
+            ErrorCodes.INSUFFICIENT_PERMISSION,
+            "You can only subscribe to your own presence topic.");
+      }
+      return;
+    }
+    Matcher typing = destination == null ? null : CHANNEL_TYPING_TOPIC.matcher(destination);
+    if (typing != null && typing.matches()) {
+      authorizeChannelAccess(userId, parseUuid(typing.group(1)), Permission.VIEW_CHANNEL);
+      return;
+    }
+    Matcher messages = destination == null ? null : CHANNEL_MESSAGES_TOPIC.matcher(destination);
+    if (messages == null || !messages.matches()) {
       throw new DomainException(
           HttpStatus.BAD_REQUEST.value(),
           ErrorCodes.VALIDATION_FAILED,
           "Subscription destination is not supported.");
     }
-    UUID channelId = parseUuid(matcher.group(1));
+    authorizeChannelAccess(userId, parseUuid(messages.group(1)), Permission.VIEW_CHANNEL);
+  }
+
+  private void authorizeChannelAccess(UUID userId, UUID channelId, Permission permission) {
     Channel channel =
         channels
             .findById(channelId)
@@ -164,10 +189,14 @@ public class StompAuthenticationInterceptor implements ChannelInterceptor {
                         HttpStatus.NOT_FOUND.value(),
                         ErrorCodes.RESOURCE_NOT_FOUND,
                         "Channel was not found."));
-    permissions.require(userId, channel.getCommunityId(), Permission.VIEW_CHANNEL);
+    permissions.require(userId, channel.getCommunityId(), permission);
   }
 
   private void authorizeSendDestination(UUID userId, String destination) {
+    Matcher typing = destination == null ? null : CHANNEL_TYPING_SEND.matcher(destination);
+    if (typing != null && typing.matches()) {
+      return;
+    }
     Matcher matcher = destination == null ? null : CHANNEL_MESSAGES_SEND.matcher(destination);
     if (matcher == null || !matcher.matches()) {
       throw new DomainException(

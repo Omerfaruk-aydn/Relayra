@@ -195,7 +195,7 @@ DELETE /api/v1/messages/{messageId}/reactions/{emoji}
 
 ---
 
-## 9. Direct Conversations
+## 10. Direct Conversations
 
 ```http
 POST /api/v1/conversations/direct/{userId}
@@ -207,7 +207,18 @@ DM gönderimi öncesi block ilişkisi kontrol edilir; block varsa `403 USER_BLOC
 
 ---
 
-## 10. Notifications
+## 11. Realtime Presence
+
+```http
+GET /api/v1/presence
+GET /api/v1/presence/status?userIds=...&userIds=...
+```
+
+Presence arkadaşlarla sınırlıdır; `/status` arkadaş olmayan ID'leri yanıttan çıkarır ve istek başına en fazla 100 kullanıcı kabul eder. Typing sinyali `/app/channels/{channelId}/typing` üzerinden `{typing:boolean}` payload ile gönderilir ve `/topic/channels/{channelId}/typing` konusuna `TYPING` olayı olarak yayınlanır (`typing:true` 5 sn TTL ile saklanır, `typing:false` durumu hemen temizler ve durdurma sinyalini yayınlar).
+
+---
+
+## 12. Notifications
 
 ```http
 GET   /api/v1/notifications?limit=50&cursor=...
@@ -217,7 +228,7 @@ POST  /api/v1/notifications/read-all
 
 ---
 
-## 11. Upload
+## 13. Upload
 
 Tercih edilen iki aşamalı model kilitlidir:
 
@@ -236,7 +247,7 @@ POST /api/v1/messages/{messageId}/attachments
 
 ---
 
-## 12. Error Contract
+## 14. Error Contract
 
 ```json
 {
@@ -266,7 +277,7 @@ Validation:
 
 ---
 
-## 13. Error Codes
+## 15. Error Codes
 
 Minimum:
 - VALIDATION_FAILED
@@ -292,7 +303,7 @@ Minimum:
 
 ---
 
-## 14. HTTP Status Semantics
+## 16. HTTP Status Semantics
 
 - 200 successful read/update
 - 201 created
@@ -310,7 +321,7 @@ Minimum:
 
 ---
 
-## 15. Idempotency
+## 17. Idempotency
 
 Mesaj gönderimi WebSocket tarafında `clientMessageId` kullanır.
 
@@ -318,7 +329,7 @@ REST create endpointlerinde kritik duplicate risk varsa `Idempotency-Key` standa
 
 ---
 
-## 16. API Security
+## 18. API Security
 
 Her endpoint için:
 - authenticated?

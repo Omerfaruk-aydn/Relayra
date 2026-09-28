@@ -24,6 +24,8 @@ public class StompOutboundAuthorizationInterceptor implements ChannelInterceptor
 
   private static final Pattern CHANNEL_MESSAGES_TOPIC =
       Pattern.compile("^/topic/channels/([0-9a-fA-F-]{36})/messages$");
+  private static final Pattern CHANNEL_TYPING_TOPIC =
+      Pattern.compile("^/topic/channels/([0-9a-fA-F-]{36})/typing$");
 
   private final JwtService jwtService;
   private final UserRepository users;
@@ -51,8 +53,13 @@ public class StompOutboundAuthorizationInterceptor implements ChannelInterceptor
       return message;
     }
     Matcher matcher = CHANNEL_MESSAGES_TOPIC.matcher(accessor.getDestination());
+    boolean isTyping = false;
     if (!matcher.matches()) {
-      return message;
+      matcher = CHANNEL_TYPING_TOPIC.matcher(accessor.getDestination());
+      isTyping = matcher.matches();
+      if (!isTyping) {
+        return message;
+      }
     }
     if (!(accessor.getUser() != null
         && accessor.getUser().getName() != null
@@ -72,11 +79,11 @@ public class StompOutboundAuthorizationInterceptor implements ChannelInterceptor
         return null;
       }
       UUID channelId = UUID.fromString(matcher.group(1));
+      Permission required = isTyping ? Permission.SEND_MESSAGES : Permission.VIEW_CHANNEL;
       return channels
               .findById(channelId)
               .filter(
-                  target ->
-                      permissions.has(userId, target.getCommunityId(), Permission.VIEW_CHANNEL))
+                  target -> permissions.has(userId, target.getCommunityId(), required))
               .isPresent()
           ? message
           : null;
