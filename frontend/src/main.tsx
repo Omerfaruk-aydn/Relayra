@@ -8,6 +8,9 @@ import { LoginPage } from "./pages/LoginPage";
 import { RegisterPage } from "./pages/RegisterPage";
 import { HomePage } from "./pages/HomePage";
 import { FriendsPage } from "./pages/FriendsPage";
+import { FriendRequestsPage } from "./pages/FriendRequestsPage";
+import { AddFriendsPage } from "./pages/AddFriendsPage";
+import { BlockedUsersPage } from "./pages/BlockedUsersPage";
 import { CommunitiesPage } from "./pages/CommunitiesPage";
 import { SettingsPage } from "./pages/SettingsPage";
 import "./styles/tokens.css";
@@ -29,6 +32,9 @@ const router = createBrowserRouter([
         children: [
           { path: "/", element: <HomePage /> },
           { path: "/friends", element: <FriendsPage /> },
+          { path: "/friends/requests", element: <FriendRequestsPage /> },
+          { path: "/friends/add", element: <AddFriendsPage /> },
+          { path: "/friends/blocked", element: <BlockedUsersPage /> },
           { path: "/communities", element: <CommunitiesPage /> },
           { path: "/settings", element: <SettingsPage /> },
         ],

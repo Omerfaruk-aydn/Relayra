@@ -52,6 +52,24 @@ export function AppShell() {
           Friends
         </NavLink>
         <NavLink
+          to="/friends/requests"
+          className={({ isActive }) => `app-context-item${isActive ? " app-context-item-active" : ""}`}
+        >
+          Requests
+        </NavLink>
+        <NavLink
+          to="/friends/add"
+          className={({ isActive }) => `app-context-item${isActive ? " app-context-item-active" : ""}`}
+        >
+          Add friends
+        </NavLink>
+        <NavLink
+          to="/friends/blocked"
+          className={({ isActive }) => `app-context-item${isActive ? " app-context-item-active" : ""}`}
+        >
+          Blocked
+        </NavLink>
+        <NavLink
           to="/communities"
           className={({ isActive }) => `app-context-item${isActive ? " app-context-item-active" : ""}`}
         >
