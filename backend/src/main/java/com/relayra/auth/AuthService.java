@@ -29,8 +29,6 @@ import org.springframework.transaction.annotation.Transactional;
 @Service
 public class AuthService {
 
-  private static final int MAX_FAILED_LOOKUPS = 3;
-
   private final UserRepository users;
   private final ProfileRepository profiles;
   private final RefreshTokenRepository refreshTokens;
@@ -60,7 +58,9 @@ public class AuthService {
   @Transactional
   public RegistrationResult register(RegisterRequest request, String ip, String userAgent) {
     rateLimiter.check(
-        RateLimitedException.ipKey("register", ip), 3, Duration.ofHours(1));
+        RateLimitedException.ipKey("register", ip),
+        properties.registerPerHourPerIp(),
+        Duration.ofHours(1));
     String username = request.username().trim();
     String email = request.email().trim();
     String usernameNormalized = username.toLowerCase(Locale.ROOT);
@@ -98,7 +98,9 @@ public class AuthService {
   @Transactional
   public RegistrationResult login(LoginRequest request, String ip, String userAgent) {
     rateLimiter.check(
-        RateLimitedException.ipKey("login", ip), 5, Duration.ofMinutes(1));
+        RateLimitedException.ipKey("login", ip),
+        properties.loginPerMinutePerIp(),
+        Duration.ofMinutes(1));
     String identifier = request.identifier().trim();
     String normalized = identifier.toLowerCase(Locale.ROOT);
     Optional<User> user =
@@ -127,7 +129,7 @@ public class AuthService {
       String refreshToken, String ip, String userAgent) {
     rateLimiter.check(
         RateLimitedException.ipKey("refresh", ip),
-        30,
+        properties.refreshPerMinutePerIp(),
         Duration.ofMinutes(1));
     String hash = TokenHasher.sha256Hex(refreshToken);
     RefreshToken stored =
@@ -240,9 +242,7 @@ public class AuthService {
   }
 
   private void revokeFamily(UUID familyId, Instant now) {
-    refreshTokens.findByTokenFamilyIdAndRevokedAtIsNull(familyId).stream()
-        .limit(MAX_FAILED_LOOKUPS + 100L)
-        .forEach(token -> token.revoke(now));
+    refreshTokens.findByTokenFamilyIdAndRevokedAtIsNull(familyId).forEach(token -> token.revoke(now));
   }
 
   private String randomToken() {

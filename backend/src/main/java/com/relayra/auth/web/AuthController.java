@@ -27,7 +27,7 @@ import org.springframework.web.bind.annotation.RestController;
 @RequestMapping("/api/v1/auth")
 public class AuthController {
 
-  static final String REFRESH_COOKIE = "relayra_refresh";
+  public static final String REFRESH_COOKIE = "relayra_refresh";
 
   private final AuthService authService;
   private final AuthProperties properties;
