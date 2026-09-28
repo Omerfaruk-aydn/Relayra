@@ -3,8 +3,15 @@ import { useAuth } from "../auth/AuthContext";
 
 const NAV = [
   { to: "/", label: "Home", mark: "H" },
+  { to: "/channels/product-design", label: "Channel", mark: "#" },
+  { to: "/dm/sarah", label: "Direct messages", mark: "✉" },
   { to: "/friends", label: "Friends", mark: "F" },
+  { to: "/search", label: "Search", mark: "⌕" },
+  { to: "/notifications", label: "Notifications", mark: "🔔" },
   { to: "/communities", label: "Communities", mark: "C" },
+  { to: "/roles", label: "Roles", mark: "🛡" },
+  { to: "/moderation", label: "Moderation", mark: "⚖" },
+  { to: "/audit", label: "Audit log", mark: "📋" },
   { to: "/settings", label: "Settings", mark: "S" },
 ];
 

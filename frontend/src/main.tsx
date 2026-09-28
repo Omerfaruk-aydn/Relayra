@@ -17,6 +17,13 @@ import { JoinCommunityPage } from "./pages/JoinCommunityPage";
 import { CommunitySettingsPage } from "./pages/CommunitySettingsPage";
 import { CommunityMembersPage } from "./pages/CommunityMembersPage";
 import { CommunityInvitesPage } from "./pages/CommunityInvitesPage";
+import { ChannelChatPage } from "./pages/ChannelChatPage";
+import { DirectMessagePage } from "./pages/DirectMessagePage";
+import { SearchPage } from "./pages/SearchPage";
+import { NotificationsPage } from "./pages/NotificationsPage";
+import { RolesPage } from "./pages/RolesPage";
+import { ModerationPage } from "./pages/ModerationPage";
+import { AuditLogPage } from "./pages/AuditLogPage";
 import { SettingsPage } from "./pages/SettingsPage";
 import "./styles/tokens.css";
 import "./styles/app.css";
@@ -46,6 +53,13 @@ const router = createBrowserRouter([
           { path: "/communities/settings", element: <CommunitySettingsPage /> },
           { path: "/communities/members", element: <CommunityMembersPage /> },
           { path: "/communities/invites", element: <CommunityInvitesPage /> },
+          { path: "/channels/:channelId", element: <ChannelChatPage /> },
+          { path: "/dm/:userId", element: <DirectMessagePage /> },
+          { path: "/search", element: <SearchPage /> },
+          { path: "/notifications", element: <NotificationsPage /> },
+          { path: "/roles", element: <RolesPage /> },
+          { path: "/moderation", element: <ModerationPage /> },
+          { path: "/audit", element: <AuditLogPage /> },
           { path: "/settings", element: <SettingsPage /> },
         ],
       },
