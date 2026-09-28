@@ -244,20 +244,16 @@ Bildirim tipleri `FRIEND_REQUEST`, `MENTION`, `REACTION`, `MODERATION`, `SYSTEM`
 
 ## 13. Upload
 
-Tercih edilen iki aşamalı model kilitlidir:
+İki aşamalı model: önce scope ile upload edilir, sonra yazarın kendi mesajına bağlanır.
 
 ```http
-POST /api/v1/uploads
+POST /api/v1/uploads                       # multipart: file + exactly one of channelId|conversationId -> 201
+POST /api/v1/messages/{messageId}/attachments  # {"attachmentIds":[...]} (1-10, no duplicates) -> 200
+GET  /api/v1/attachments/{attachmentId}         # metadata -> 200
+GET  /api/v1/attachments/{attachmentId}/download # bytes (attachment;filename, nosniff) -> 200
 ```
 
-Backend:
-- metadata validate eder,
-- güvenli upload target döner veya stream kabul eder.
-
-Attachment finalize:
-```http
-POST /api/v1/messages/{messageId}/attachments
-```
+Kurallar: en fazla 10 MB (beyan + gerçek bayt ikisi de ölçülür), imza tabanlı MIME tespiti (beyan edilen tip yalnızca güvenli allowlist içindeyse kabul edilir), çalıştırılabilir/active içerik engeli (exe/sh/js/html/svg/php ve ELF/Mach-O/class imzaları dahil), dosya adı temizlenir, storage key sunucu üretir. Upload için `ATTACH_FILES` (kanal) veya DM izni, finalize için aynı ek izni + yazarlık + scope eşleşmesi gerekir; mesaj başına en fazla 10 ek. İndirme/metadata korumalıdır: linklenmemiş dosyayı yalnızca yükleyen görür, bağlı dosyada mesaj scope izni aranır. Mesaj soft-delete edildiğinde satırlar korunur, yalnızca baytlar silinir; sonraki indirme/metadata `409 MESSAGE_DELETED` döner.
 
 ---
 

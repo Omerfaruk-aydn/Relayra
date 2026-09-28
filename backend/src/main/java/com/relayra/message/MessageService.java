@@ -24,6 +24,7 @@ import com.relayra.reaction.domain.MessageReaction;
 import com.relayra.reaction.dto.ReactionResponse;
 import com.relayra.reaction.persistence.MessageReactionRepository;
 import com.relayra.realtime.MessageChangedEvent;
+import com.relayra.attachment.AttachmentService;
 import com.relayra.notification.NotificationService;
 import com.relayra.notification.domain.NotificationType;
 import com.relayra.audit.AuditService;
@@ -56,6 +57,7 @@ public class MessageService {
   private final ApplicationEventPublisher eventPublisher;
   private final AuditService audit;
   private final NotificationService notifications;
+  private final AttachmentService attachments;
 
   public MessageService(
       MessageRepository messages,
@@ -68,7 +70,8 @@ public class MessageService {
       RateLimiter rateLimiter,
       ApplicationEventPublisher eventPublisher,
       AuditService audit,
-      NotificationService notifications) {
+      NotificationService notifications,
+      AttachmentService attachments) {
     this.messages = messages;
     this.messageReactions = messageReactions;
     this.channels = channels;
@@ -80,6 +83,7 @@ public class MessageService {
     this.eventPublisher = eventPublisher;
     this.audit = audit;
     this.notifications = notifications;
+    this.attachments = attachments;
   }
 
   @Transactional
@@ -397,6 +401,12 @@ public class MessageService {
   private void applyDelete(Message message) {
     message.softDelete();
     messages.flush();
+    try {
+      attachments.deleteOnMessageDelete(message.getId());
+    } catch (RuntimeException failure) {
+      org.slf4j.LoggerFactory.getLogger(MessageService.class)
+          .warn("Attachment cleanup failed for message {}: {}", message.getId(), failure.toString());
+    }
     User author = requireUser(message.getAuthorId());
     MessageResponse response = toResponse(message, author, displayName(author));
     eventPublisher.publishEvent(new MessageChangedEvent("MESSAGE_DELETED", response));
