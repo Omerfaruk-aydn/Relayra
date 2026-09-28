@@ -26,10 +26,10 @@ public class Profile {
   @Column(name = "bio", length = 500)
   private String bio;
 
-  @Column(name = "avatar_key")
+  @Column(name = "avatar_key", length = 512)
   private String avatarKey;
 
-  @Column(name = "banner_key")
+  @Column(name = "banner_key", length = 512)
   private String bannerKey;
 
   @Column(name = "timezone", length = 64)
@@ -87,5 +87,34 @@ public class Profile {
 
   public String getTimezone() {
     return timezone;
+  }
+
+  public void update(
+      String displayName, String bio, String avatarKey, String bannerKey, String timezone) {
+    this.displayName = displayName;
+    this.bio = bio;
+    this.avatarKey = avatarKey;
+    this.bannerKey = bannerKey;
+    this.timezone = timezone;
+  }
+
+  public void setDisplayName(String displayName) {
+    this.displayName = displayName;
+  }
+
+  public void setBio(String bio) {
+    this.bio = bio;
+  }
+
+  public void setAvatarKey(String avatarKey) {
+    this.avatarKey = avatarKey;
+  }
+
+  public void setBannerKey(String bannerKey) {
+    this.bannerKey = bannerKey;
+  }
+
+  public void setTimezone(String timezone) {
+    this.timezone = timezone;
   }
 }
