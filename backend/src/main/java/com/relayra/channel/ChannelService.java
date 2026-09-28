@@ -15,9 +15,9 @@ import com.relayra.channel.persistence.ChannelRepository;
 import com.relayra.common.error.DomainException;
 import com.relayra.common.error.ErrorCodes;
 import com.relayra.community.domain.Community;
-import com.relayra.community.domain.MemberStatus;
-import com.relayra.community.persistence.CommunityMemberRepository;
 import com.relayra.community.persistence.CommunityRepository;
+import com.relayra.role.PermissionService;
+import com.relayra.role.domain.Permission;
 import java.time.Duration;
 import java.util.HashSet;
 import java.util.List;
@@ -33,21 +33,21 @@ public class ChannelService {
 
   private final ChannelRepository channels;
   private final CommunityRepository communities;
-  private final CommunityMemberRepository members;
   private final UserRepository users;
   private final RateLimiter rateLimiter;
+  private final PermissionService permissions;
 
   public ChannelService(
       ChannelRepository channels,
       CommunityRepository communities,
-      CommunityMemberRepository members,
       UserRepository users,
-      RateLimiter rateLimiter) {
+      RateLimiter rateLimiter,
+      PermissionService permissions) {
     this.channels = channels;
     this.communities = communities;
-    this.members = members;
     this.users = users;
     this.rateLimiter = rateLimiter;
+    this.permissions = permissions;
   }
 
   @Transactional
@@ -55,10 +55,10 @@ public class ChannelService {
       UUID callerId, UUID communityId, CreateChannelRequest request) {
     requireActiveUser(callerId);
     Community community = requireCommunity(communityId);
-    requireOwner(callerId, community);
+    permissions.require(callerId, communityId, Permission.MANAGE_CHANNELS);
     checkMutationRate(callerId);
     community = requireCommunityForUpdate(communityId);
-    requireOwner(callerId, community);
+    permissions.require(callerId, communityId, Permission.MANAGE_CHANNELS);
     String name = normalizeName(request.name());
     String description = trimToNull(request.description());
     ChannelType type = parseType(request.type());
@@ -77,7 +77,7 @@ public class ChannelService {
   @Transactional(readOnly = true)
   public List<ChannelResponse> list(UUID callerId, UUID communityId) {
     requireActiveUser(callerId);
-    requireMembership(callerId, communityId);
+    permissions.require(callerId, communityId, Permission.VIEW_CHANNEL);
     requireCommunity(communityId);
     return channels.findByCommunityIdOrderByPositionAscIdAsc(communityId).stream()
         .map(this::toResponse)
@@ -90,10 +90,10 @@ public class ChannelService {
     requireActiveUser(callerId);
     Channel snapshot = requireChannel(channelId);
     Community community = requireCommunity(snapshot.getCommunityId());
-    requireOwner(callerId, community);
+    permissions.require(callerId, community.getId(), Permission.MANAGE_CHANNELS);
     checkMutationRate(callerId);
     community = requireCommunityForUpdate(community.getId());
-    requireOwner(callerId, community);
+    permissions.require(callerId, community.getId(), Permission.MANAGE_CHANNELS);
     Channel channel = requireChannelForUpdate(channelId);
     if (!channel.getCommunityId().equals(community.getId())) {
       throw channelNotFound();
@@ -110,10 +110,10 @@ public class ChannelService {
     requireActiveUser(callerId);
     Channel snapshot = requireChannel(channelId);
     Community community = requireCommunity(snapshot.getCommunityId());
-    requireOwner(callerId, community);
+    permissions.require(callerId, community.getId(), Permission.MANAGE_CHANNELS);
     checkMutationRate(callerId);
     community = requireCommunityForUpdate(community.getId());
-    requireOwner(callerId, community);
+    permissions.require(callerId, community.getId(), Permission.MANAGE_CHANNELS);
     List<Channel> locked = channels.findByCommunityIdForUpdate(community.getId());
     Channel channel =
         locked.stream()
@@ -141,10 +141,10 @@ public class ChannelService {
       UUID callerId, UUID communityId, ReorderChannelsRequest request) {
     requireActiveUser(callerId);
     Community community = requireCommunity(communityId);
-    requireOwner(callerId, community);
+    permissions.require(callerId, communityId, Permission.MANAGE_CHANNELS);
     checkMutationRate(callerId);
     community = requireCommunityForUpdate(communityId);
-    requireOwner(callerId, community);
+    permissions.require(callerId, communityId, Permission.MANAGE_CHANNELS);
     List<Channel> locked = channels.findByCommunityIdForUpdate(communityId);
     List<UUID> requested = request.channelIds();
     if (requested == null) {
@@ -221,27 +221,6 @@ public class ChannelService {
   private DomainException channelNotFound() {
     return new DomainException(
         HttpStatus.NOT_FOUND.value(), ErrorCodes.RESOURCE_NOT_FOUND, "Channel was not found.");
-  }
-
-  private void requireMembership(UUID callerId, UUID communityId) {
-    members
-        .findByCommunityIdAndUserId(communityId, callerId)
-        .filter(member -> member.getStatus() == MemberStatus.ACTIVE)
-        .orElseThrow(
-            () ->
-                new DomainException(
-                    HttpStatus.FORBIDDEN.value(),
-                    ErrorCodes.ACCESS_DENIED,
-                    "Community membership is required."));
-  }
-
-  private void requireOwner(UUID callerId, Community community) {
-    if (!community.getOwnerId().equals(callerId)) {
-      throw new DomainException(
-          HttpStatus.FORBIDDEN.value(),
-          ErrorCodes.INSUFFICIENT_PERMISSION,
-          "Only the community owner can manage channels yet.");
-    }
   }
 
   private void checkMutationRate(UUID callerId) {

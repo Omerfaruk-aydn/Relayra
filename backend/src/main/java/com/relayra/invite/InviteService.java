@@ -17,6 +17,8 @@ import com.relayra.invite.domain.Invite;
 import com.relayra.invite.dto.CreateInviteRequest;
 import com.relayra.invite.dto.InviteResponse;
 import com.relayra.invite.persistence.InviteRepository;
+import com.relayra.role.PermissionService;
+import com.relayra.role.domain.Permission;
 import java.security.SecureRandom;
 import java.time.Duration;
 import java.time.Instant;
@@ -36,6 +38,7 @@ public class InviteService {
   private final CommunityMemberRepository members;
   private final UserRepository users;
   private final RateLimiter rateLimiter;
+  private final PermissionService permissions;
   private final SecureRandom random = new SecureRandom();
 
   public InviteService(
@@ -43,19 +46,21 @@ public class InviteService {
       CommunityRepository communities,
       CommunityMemberRepository members,
       UserRepository users,
-      RateLimiter rateLimiter) {
+      RateLimiter rateLimiter,
+      PermissionService permissions) {
     this.invites = invites;
     this.communities = communities;
     this.members = members;
     this.users = users;
     this.rateLimiter = rateLimiter;
+    this.permissions = permissions;
   }
 
   @Transactional
   public InviteResponse create(UUID callerId, UUID communityId, CreateInviteRequest request) {
     requireActiveUser(callerId);
     Community community = requireCommunity(communityId);
-    requireOwnerOrInvitePermission(callerId, community);
+    permissions.require(callerId, communityId, Permission.CREATE_INVITES);
     rateLimiter.check(
         RateLimitedException.deviceKey("invite-create", callerId), 20, Duration.ofHours(1));
     if (request.maxUses() != null && request.maxUses() <= 0) {
@@ -199,7 +204,7 @@ public class InviteService {
                         ErrorCodes.RESOURCE_NOT_FOUND,
                         "Invite was not found."));
     Community community = requireCommunity(invite.getCommunityId());
-    requireOwnerOrInvitePermission(callerId, community);
+    permissions.require(callerId, community.getId(), Permission.MANAGE_INVITES);
     invite.revoke();
   }
 
@@ -207,7 +212,7 @@ public class InviteService {
   public List<InviteResponse> listForCommunity(UUID callerId, UUID communityId) {
     requireActiveUser(callerId);
     Community community = requireCommunity(communityId);
-    requireOwnerOrInvitePermission(callerId, community);
+    permissions.require(callerId, community.getId(), Permission.MANAGE_INVITES);
     return invites.findByCommunityId(communityId).stream().map(this::toResponse).toList();
   }
 
@@ -237,26 +242,6 @@ public class InviteService {
           HttpStatus.FORBIDDEN.value(), ErrorCodes.ACCESS_DENIED, "Account is disabled.");
     }
     return user;
-  }
-
-  private void requireOwnerOrInvitePermission(UUID callerId, Community community) {
-    if (community.getOwnerId().equals(callerId)) {
-      return;
-    }
-    members
-        .findByCommunityIdAndUserId(community.getId(), callerId)
-        .filter(m -> m.getStatus() == MemberStatus.ACTIVE)
-        .orElseThrow(
-            () ->
-                new DomainException(
-                    HttpStatus.FORBIDDEN.value(),
-                    ErrorCodes.INSUFFICIENT_PERMISSION,
-                    "Invite management requires membership."));
-    // Until Phase 8 role engine lands, only the owner manages invites.
-    throw new DomainException(
-        HttpStatus.FORBIDDEN.value(),
-        ErrorCodes.INSUFFICIENT_PERMISSION,
-        "Only the community owner can manage invites yet.");
   }
 
   private String randomCode() {

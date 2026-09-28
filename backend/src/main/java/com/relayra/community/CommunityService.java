@@ -18,6 +18,10 @@ import com.relayra.community.dto.TransferOwnershipRequest;
 import com.relayra.community.dto.UpdateCommunityRequest;
 import com.relayra.community.persistence.CommunityMemberRepository;
 import com.relayra.community.persistence.CommunityRepository;
+import com.relayra.role.domain.Permission;
+import com.relayra.role.domain.Role;
+import com.relayra.role.persistence.RoleRepository;
+import java.util.EnumSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -34,16 +38,19 @@ public class CommunityService {
   private final CommunityRepository communities;
   private final CommunityMemberRepository members;
   private final ChannelRepository channels;
+  private final RoleRepository roles;
   private final UserRepository users;
 
   public CommunityService(
       CommunityRepository communities,
       CommunityMemberRepository members,
       ChannelRepository channels,
+      RoleRepository roles,
       UserRepository users) {
     this.communities = communities;
     this.members = members;
     this.channels = channels;
+    this.roles = roles;
     this.users = users;
   }
 
@@ -64,6 +71,16 @@ public class CommunityService {
     members.save(new CommunityMember(UUID.randomUUID(), communityId, callerId));
     channels.save(
         new Channel(UUID.randomUUID(), communityId, "general", ChannelType.TEXT, 0));
+    Role everyone = new Role(UUID.randomUUID(), communityId, "@everyone", 0, true);
+    everyone.update(
+        "@everyone",
+        null,
+        EnumSet.of(
+            Permission.VIEW_CHANNEL,
+            Permission.SEND_MESSAGES,
+            Permission.ADD_REACTIONS,
+            Permission.ATTACH_FILES));
+    roles.save(everyone);
     return toResponse(community, 1L);
   }
 
@@ -130,6 +147,7 @@ public class CommunityService {
           "Confirmation name does not match the community name.");
     }
     channels.deleteByCommunityId(communityId);
+    roles.deleteByCommunityId(communityId);
     communities.delete(community);
   }
 

@@ -149,7 +149,25 @@ Reorder body sıralı `channelIds` listesi içerir ve transaction içinde uygula
 
 ---
 
-## 8. Messages
+## 8. Roles & Permissions
+
+```http
+POST   /api/v1/communities/{communityId}/roles
+GET    /api/v1/communities/{communityId}/roles
+PATCH  /api/v1/roles/{roleId}
+DELETE /api/v1/roles/{roleId}
+POST   /api/v1/communities/{communityId}/roles/reorder
+POST   /api/v1/communities/{communityId}/members/{userId}/roles
+GET    /api/v1/communities/{communityId}/members/{userId}/roles
+DELETE /api/v1/communities/{communityId}/members/{userId}/roles/{roleId}
+GET    /api/v1/communities/{communityId}/permissions/me
+```
+
+Managed roller değiştirilemez veya doğrudan atanamaz. Reorder body, sıralı custom `roleIds` listesini eksiksiz içerir. Atama ve kaldırma işlemleri rol hiyerarşisini uygular.
+
+---
+
+## 9. Messages
 
 ```http
 GET /api/v1/channels/{channelId}/messages?limit=50&beforeCreatedAt=...&beforeId=...
