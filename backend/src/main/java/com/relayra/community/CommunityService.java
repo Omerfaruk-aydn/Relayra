@@ -3,6 +3,9 @@ package com.relayra.community;
 import com.relayra.auth.domain.User;
 import com.relayra.auth.domain.UserStatus;
 import com.relayra.auth.persistence.UserRepository;
+import com.relayra.channel.domain.Channel;
+import com.relayra.channel.domain.ChannelType;
+import com.relayra.channel.persistence.ChannelRepository;
 import com.relayra.common.error.DomainException;
 import com.relayra.common.error.ErrorCodes;
 import com.relayra.community.domain.Community;
@@ -30,14 +33,17 @@ public class CommunityService {
 
   private final CommunityRepository communities;
   private final CommunityMemberRepository members;
+  private final ChannelRepository channels;
   private final UserRepository users;
 
   public CommunityService(
       CommunityRepository communities,
       CommunityMemberRepository members,
+      ChannelRepository channels,
       UserRepository users) {
     this.communities = communities;
     this.members = members;
+    this.channels = channels;
     this.users = users;
   }
 
@@ -56,6 +62,8 @@ public class CommunityService {
     community.rename(name, trimToNull(request.description()), trimToNull(request.iconKey()));
     communities.save(community);
     members.save(new CommunityMember(UUID.randomUUID(), communityId, callerId));
+    channels.save(
+        new Channel(UUID.randomUUID(), communityId, "general", ChannelType.TEXT, 0));
     return toResponse(community, 1L);
   }
 
@@ -121,6 +129,7 @@ public class CommunityService {
           ErrorCodes.VALIDATION_FAILED,
           "Confirmation name does not match the community name.");
     }
+    channels.deleteByCommunityId(communityId);
     communities.delete(community);
   }
 

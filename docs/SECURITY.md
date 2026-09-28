@@ -200,6 +200,7 @@ Baseline rate limitler (ayarlanabilir):
 - typing: 60/dakika/kullanıcı
 - invite create: 20/saat/kullanıcı
 - invite resolve/join preview: 60/dakika/kullanıcı
+- channel mutation: 60/dakika/kullanıcı
 - upload: 20/saat/kullanıcı
 
 Limit aşımı `429 RATE_LIMITED` + `Retry-After` döner.
