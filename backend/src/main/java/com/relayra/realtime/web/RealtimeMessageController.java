@@ -38,6 +38,17 @@ public class RealtimeMessageController {
     return new RealtimeEvent<>(UUID.randomUUID(), "MESSAGE_ACK", Instant.now(), response);
   }
 
+  @MessageMapping("/conversations/{conversationId}/messages")
+  @SendToUser("/queue/acks")
+  public RealtimeEvent<MessageResponse> sendDirect(
+      @DestinationVariable UUID conversationId,
+      @Valid @Payload SendMessageRequest request,
+      Principal principal) {
+    UUID callerId = requireCaller(principal);
+    MessageResponse response = messages.sendToConversation(callerId, conversationId, request);
+    return new RealtimeEvent<>(UUID.randomUUID(), "MESSAGE_ACK", Instant.now(), response);
+  }
+
   @MessageExceptionHandler
   @SendToUser("/queue/errors")
   public RealtimeError handle(Throwable exception) {

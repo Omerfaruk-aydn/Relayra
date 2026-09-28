@@ -203,7 +203,16 @@ GET  /api/v1/conversations
 GET  /api/v1/conversations/{conversationId}
 ```
 
-DM gönderimi öncesi block ilişkisi kontrol edilir; block varsa `403 USER_BLOCKED` döner.
+DM gönderimi öncesi block ilişkisi kontrol edilir; block varsa `403 USER_BLOCKED` döner. Aynı iki kullanıcı için tek canonical conversation vardır (ikinci çağrı mevcut olanı döner); kendinle DM `400` döner.
+
+DM mesajları:
+
+```http
+POST /api/v1/conversations/{conversationId}/messages
+GET  /api/v1/conversations/{conversationId}/messages?limit=50&beforeCreatedAt=...&beforeId=...
+```
+
+Realtime DM gönderimi `/app/conversations/{conversationId}/messages` adresine yapılır; ack `/user/queue/acks`, mesaj oluşturma, düzenleme ve silme olayları uygun participant'lara `/user/queue/messages` üzerinden iletilir. Participant olmayan istekler `404` alır. Block sonrası geçmiş okunabilir, ancak yeni mesaj gönderilemez ve mevcut mesajlar düzenlenemez veya silinemez.
 
 ---
 

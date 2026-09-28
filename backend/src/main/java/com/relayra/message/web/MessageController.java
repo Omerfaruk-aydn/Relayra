@@ -55,6 +55,28 @@ public class MessageController {
             requireCaller(authentication), channelId, limit, beforeCreatedAt, beforeId));
   }
 
+  @PostMapping("/conversations/{conversationId}/messages")
+  public ResponseEntity<MessageResponse> sendToConversation(
+      @PathVariable UUID conversationId,
+      @Valid @RequestBody SendMessageRequest request,
+      Authentication authentication) {
+    MessageResponse created =
+        messages.sendToConversation(requireCaller(authentication), conversationId, request);
+    return ResponseEntity.status(HttpStatus.CREATED).body(created);
+  }
+
+  @GetMapping("/conversations/{conversationId}/messages")
+  public ResponseEntity<MessagePageResponse> conversationHistory(
+      @PathVariable UUID conversationId,
+      @RequestParam(required = false) Integer limit,
+      @RequestParam(required = false) Instant beforeCreatedAt,
+      @RequestParam(required = false) UUID beforeId,
+      Authentication authentication) {
+    return ResponseEntity.ok(
+        messages.conversationHistory(
+            requireCaller(authentication), conversationId, limit, beforeCreatedAt, beforeId));
+  }
+
   @PatchMapping("/messages/{messageId}")
   public ResponseEntity<MessageResponse> edit(
       @PathVariable UUID messageId,

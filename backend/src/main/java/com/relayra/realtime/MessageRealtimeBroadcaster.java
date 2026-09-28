@@ -1,7 +1,9 @@
 package com.relayra.realtime;
 
+import com.relayra.conversation.ConversationService;
 import com.relayra.realtime.dto.RealtimeEvent;
 import java.time.Instant;
+import java.util.List;
 import java.util.UUID;
 import org.springframework.messaging.simp.SimpMessagingTemplate;
 import org.springframework.stereotype.Component;
@@ -12,18 +14,33 @@ import org.springframework.transaction.event.TransactionalEventListener;
 public class MessageRealtimeBroadcaster {
 
   private final SimpMessagingTemplate messagingTemplate;
+  private final ConversationService conversations;
 
-  public MessageRealtimeBroadcaster(SimpMessagingTemplate messagingTemplate) {
+  public MessageRealtimeBroadcaster(
+      SimpMessagingTemplate messagingTemplate, ConversationService conversations) {
     this.messagingTemplate = messagingTemplate;
+    this.conversations = conversations;
   }
 
   @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
   public void broadcast(MessageChangedEvent event) {
-    if (event.data().channelId() == null) {
+    if (event.data().channelId() != null) {
+      messagingTemplate.convertAndSend(
+          "/topic/channels/" + event.data().channelId() + "/messages",
+          new RealtimeEvent<>(UUID.randomUUID(), event.type(), Instant.now(), event.data()));
       return;
     }
-    messagingTemplate.convertAndSend(
-        "/topic/channels/" + event.data().channelId() + "/messages",
-        new RealtimeEvent<>(UUID.randomUUID(), event.type(), Instant.now(), event.data()));
+    if (event.data().conversationId() == null) {
+      return;
+    }
+    RealtimeEvent<?> envelope =
+        new RealtimeEvent<>(UUID.randomUUID(), event.type(), Instant.now(), event.data());
+    UUID senderId = event.data().author().id();
+    List<UUID> recipients = conversations.participantIds(event.data().conversationId());
+    for (UUID recipient : recipients) {
+      if (conversations.canDeliver(senderId, recipient)) {
+        messagingTemplate.convertAndSendToUser(recipient.toString(), "/queue/messages", envelope);
+      }
+    }
   }
 }

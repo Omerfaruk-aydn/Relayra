@@ -12,6 +12,7 @@ import com.relayra.channel.domain.Channel;
 import com.relayra.channel.persistence.ChannelRepository;
 import com.relayra.common.error.DomainException;
 import com.relayra.common.error.ErrorCodes;
+import com.relayra.conversation.ConversationService;
 import com.relayra.message.domain.Message;
 import com.relayra.message.domain.MessageType;
 import com.relayra.message.dto.EditMessageRequest;
@@ -40,6 +41,7 @@ public class MessageService {
 
   private final MessageRepository messages;
   private final ChannelRepository channels;
+  private final ConversationService conversations;
   private final UserRepository users;
   private final ProfileRepository profiles;
   private final PermissionService permissions;
@@ -49,6 +51,7 @@ public class MessageService {
   public MessageService(
       MessageRepository messages,
       ChannelRepository channels,
+      ConversationService conversations,
       UserRepository users,
       ProfileRepository profiles,
       PermissionService permissions,
@@ -56,6 +59,7 @@ public class MessageService {
       ApplicationEventPublisher eventPublisher) {
     this.messages = messages;
     this.channels = channels;
+    this.conversations = conversations;
     this.users = users;
     this.profiles = profiles;
     this.permissions = permissions;
@@ -111,6 +115,68 @@ public class MessageService {
     return response;
   }
 
+  @Transactional
+  public MessageResponse sendToConversation(
+      UUID callerId, UUID conversationId, SendMessageRequest request) {
+    User caller = requireActiveUser(callerId);
+    conversations.requireMessagingAllowed(callerId, conversationId);
+    String clientMessageId = normalizeClientMessageId(request.clientMessageId());
+    String content = normalizeContent(request.content());
+    Message existing =
+        messages.findByAuthorIdAndClientMessageId(callerId, clientMessageId).orElse(null);
+    if (existing != null) {
+      if (!conversationId.equals(existing.getConversationId())) {
+        throw new DomainException(
+            HttpStatus.CONFLICT.value(),
+            ErrorCodes.CONFLICT,
+            "clientMessageId was already used in another scope.");
+      }
+      return toResponse(existing, caller, displayName(caller));
+    }
+    rateLimiter.check(
+        RateLimitedException.deviceKey("message-send", callerId), 30, Duration.ofMinutes(1));
+    if (request.replyToMessageId() != null) {
+      Message reply = messages.findById(request.replyToMessageId()).orElse(null);
+      if (reply == null
+          || !conversationId.equals(reply.getConversationId())
+          || reply.getDeletedAt() != null) {
+        throw new DomainException(
+            HttpStatus.BAD_REQUEST.value(),
+            ErrorCodes.VALIDATION_FAILED,
+            "Reply target is unavailable in this conversation.");
+      }
+    }
+    Message message =
+        new Message(
+            UUID.randomUUID(),
+            callerId,
+            null,
+            conversationId,
+            request.replyToMessageId(),
+            content,
+            MessageType.TEXT,
+            clientMessageId);
+    MessageResponse response =
+        toResponse(messages.saveAndFlush(message), caller, displayName(caller));
+    eventPublisher.publishEvent(new MessageChangedEvent("MESSAGE_CREATED", response));
+    return response;
+  }
+
+  @Transactional(readOnly = true)
+  public MessagePageResponse conversationHistory(
+      UUID callerId,
+      UUID conversationId,
+      Integer limit,
+      Instant beforeCreatedAt,
+      UUID beforeId) {
+    requireActiveUser(callerId);
+    conversations.requireParticipant(callerId, conversationId);
+    validateCursor(beforeCreatedAt, beforeId);
+    return messagePage(
+        messages.findConversationHistory(
+            conversationId, beforeCreatedAt, beforeId, pageRequest(limit)));
+  }
+
   @Transactional(readOnly = true)
   public MessagePageResponse history(
       UUID callerId,
@@ -121,6 +187,14 @@ public class MessageService {
     requireActiveUser(callerId);
     Channel channel = requireChannel(channelId);
     permissions.require(callerId, channel.getCommunityId(), Permission.VIEW_CHANNEL);
+    validateCursor(beforeCreatedAt, beforeId);
+    List<Message> page =
+        messages.findChannelHistory(
+            channelId, beforeCreatedAt, beforeId, pageRequest(limit));
+    return messagePage(page);
+  }
+
+  private PageRequest pageRequest(Integer limit) {
     int size = limit == null ? 50 : limit;
     if (size < 1 || size > 100) {
       throw new DomainException(
@@ -128,15 +202,19 @@ public class MessageService {
           ErrorCodes.VALIDATION_FAILED,
           "limit must be between 1 and 100.");
     }
+    return PageRequest.of(0, size);
+  }
+
+  private void validateCursor(Instant beforeCreatedAt, UUID beforeId) {
     if ((beforeCreatedAt == null) != (beforeId == null)) {
       throw new DomainException(
           HttpStatus.BAD_REQUEST.value(),
           ErrorCodes.VALIDATION_FAILED,
           "beforeCreatedAt and beforeId must be provided together.");
     }
-    List<Message> page =
-        messages.findChannelHistory(
-            channelId, beforeCreatedAt, beforeId, PageRequest.of(0, size));
+  }
+
+  private MessagePageResponse messagePage(List<Message> page) {
     Map<UUID, User> authors =
         users.findAllById(page.stream().map(Message::getAuthorId).distinct().toList()).stream()
             .collect(Collectors.toMap(User::getId, user -> user));
@@ -168,20 +246,51 @@ public class MessageService {
   public MessageResponse edit(UUID callerId, UUID messageId, EditMessageRequest request) {
     requireActiveUser(callerId);
     Message snapshot = requireMessage(messageId);
-    Channel channel = requireMessageChannel(snapshot);
-    permissions.require(callerId, channel.getCommunityId(), Permission.VIEW_CHANNEL);
+    if (snapshot.getChannelId() != null) {
+      Channel channel = requireMessageChannel(snapshot);
+      permissions.require(callerId, channel.getCommunityId(), Permission.VIEW_CHANNEL);
+      return editChannelMessage(callerId, snapshot, channel, request);
+    }
+    conversations.requireParticipant(callerId, snapshot.getConversationId());
+    return editConversationMessage(callerId, snapshot, request);
+  }
+
+  private MessageResponse editChannelMessage(
+      UUID callerId, Message snapshot, Channel channel, EditMessageRequest request) {
     if (!snapshot.getAuthorId().equals(callerId)) {
       throw new DomainException(
           HttpStatus.FORBIDDEN.value(),
           ErrorCodes.INSUFFICIENT_PERMISSION,
           "Only the author can edit this message.");
     }
-    Message message = requireMessageForUpdate(messageId);
+    Message message = requireMessageForUpdate(snapshot.getId());
     if (!message.getAuthorId().equals(callerId)
         || !channel.getId().equals(message.getChannelId())) {
       throw new DomainException(
           HttpStatus.NOT_FOUND.value(), ErrorCodes.RESOURCE_NOT_FOUND, "Message was not found.");
     }
+    return applyEdit(message, request);
+  }
+
+  private MessageResponse editConversationMessage(
+      UUID callerId, Message snapshot, EditMessageRequest request) {
+    if (!snapshot.getAuthorId().equals(callerId)) {
+      throw new DomainException(
+          HttpStatus.FORBIDDEN.value(),
+          ErrorCodes.INSUFFICIENT_PERMISSION,
+          "Only the author can edit this message.");
+    }
+    conversations.requireMessagingAllowed(callerId, snapshot.getConversationId());
+    Message message = requireMessageForUpdate(snapshot.getId());
+    if (!message.getAuthorId().equals(callerId)
+        || !snapshot.getConversationId().equals(message.getConversationId())) {
+      throw new DomainException(
+          HttpStatus.NOT_FOUND.value(), ErrorCodes.RESOURCE_NOT_FOUND, "Message was not found.");
+    }
+    return applyEdit(message, request);
+  }
+
+  private MessageResponse applyEdit(Message message, EditMessageRequest request) {
     if (message.getDeletedAt() != null) {
       throw new DomainException(
           HttpStatus.CONFLICT.value(), ErrorCodes.MESSAGE_DELETED, "Message was deleted.");
@@ -204,17 +313,46 @@ public class MessageService {
   public void delete(UUID callerId, UUID messageId) {
     requireActiveUser(callerId);
     Message snapshot = requireMessage(messageId);
+    if (snapshot.getChannelId() != null) {
+      deleteChannelMessage(callerId, snapshot);
+      return;
+    }
+    conversations.requireParticipant(callerId, snapshot.getConversationId());
+    deleteConversationMessage(callerId, snapshot);
+  }
+
+  private void deleteChannelMessage(UUID callerId, Message snapshot) {
     Channel channel = requireMessageChannel(snapshot);
     if (!snapshot.getAuthorId().equals(callerId)) {
       permissions.require(callerId, channel.getCommunityId(), Permission.DELETE_MESSAGES);
     } else {
       permissions.require(callerId, channel.getCommunityId(), Permission.VIEW_CHANNEL);
     }
-    Message message = requireMessageForUpdate(messageId);
+    Message message = requireMessageForUpdate(snapshot.getId());
     if (!channel.getId().equals(message.getChannelId())) {
       throw new DomainException(
           HttpStatus.NOT_FOUND.value(), ErrorCodes.RESOURCE_NOT_FOUND, "Message was not found.");
     }
+    applyDelete(message);
+  }
+
+  private void deleteConversationMessage(UUID callerId, Message snapshot) {
+    if (!snapshot.getAuthorId().equals(callerId)) {
+      throw new DomainException(
+          HttpStatus.FORBIDDEN.value(),
+          ErrorCodes.INSUFFICIENT_PERMISSION,
+          "Only the author can delete this message.");
+    }
+    conversations.requireMessagingAllowed(callerId, snapshot.getConversationId());
+    Message message = requireMessageForUpdate(snapshot.getId());
+    if (!snapshot.getConversationId().equals(message.getConversationId())) {
+      throw new DomainException(
+          HttpStatus.NOT_FOUND.value(), ErrorCodes.RESOURCE_NOT_FOUND, "Message was not found.");
+    }
+    applyDelete(message);
+  }
+
+  private void applyDelete(Message message) {
     message.softDelete();
     messages.flush();
     User author = requireUser(message.getAuthorId());

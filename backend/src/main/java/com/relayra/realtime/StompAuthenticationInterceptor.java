@@ -8,6 +8,7 @@ import com.relayra.channel.domain.Channel;
 import com.relayra.channel.persistence.ChannelRepository;
 import com.relayra.common.error.DomainException;
 import com.relayra.common.error.ErrorCodes;
+import com.relayra.conversation.ConversationService;
 import com.relayra.role.PermissionService;
 import com.relayra.role.domain.Permission;
 import io.jsonwebtoken.JwtException;
@@ -43,6 +44,8 @@ public class StompAuthenticationInterceptor implements ChannelInterceptor {
       Pattern.compile("^/app/channels/([0-9a-fA-F-]{36})/typing$");
   private static final Pattern CHANNEL_MESSAGES_SEND =
       Pattern.compile("^/app/channels/([0-9a-fA-F-]{36})/messages$");
+  private static final Pattern CONVERSATION_MESSAGES_SEND =
+      Pattern.compile("^/app/conversations/([0-9a-fA-F-]{36})/messages$");
   static final String TOKEN_SESSION_KEY = "relayra.accessToken";
   private static final String SUBSCRIPTIONS_SESSION_KEY = "relayra.subscriptions";
   private static final int MAX_SUBSCRIPTIONS_PER_SESSION = 100;
@@ -52,16 +55,19 @@ public class StompAuthenticationInterceptor implements ChannelInterceptor {
   private final JwtService jwtService;
   private final UserRepository users;
   private final ChannelRepository channels;
+  private final ConversationService conversations;
   private final PermissionService permissions;
 
   public StompAuthenticationInterceptor(
       JwtService jwtService,
       UserRepository users,
       ChannelRepository channels,
+      ConversationService conversations,
       PermissionService permissions) {
     this.jwtService = jwtService;
     this.users = users;
     this.channels = channels;
+    this.conversations = conversations;
     this.permissions = permissions;
   }
 
@@ -150,7 +156,9 @@ public class StompAuthenticationInterceptor implements ChannelInterceptor {
   }
 
   private void authorizeSubscription(UUID userId, String destination, String sessionId) {
-    if ("/user/queue/acks".equals(destination) || "/user/queue/errors".equals(destination)) {
+    if ("/user/queue/acks".equals(destination)
+        || "/user/queue/errors".equals(destination)
+        || "/user/queue/messages".equals(destination)) {
       return;
     }
     Matcher presence = destination == null ? null : PRESENCE_TOPIC.matcher(destination);
@@ -195,6 +203,12 @@ public class StompAuthenticationInterceptor implements ChannelInterceptor {
   private void authorizeSendDestination(UUID userId, String destination) {
     Matcher typing = destination == null ? null : CHANNEL_TYPING_SEND.matcher(destination);
     if (typing != null && typing.matches()) {
+      return;
+    }
+    Matcher conversation =
+        destination == null ? null : CONVERSATION_MESSAGES_SEND.matcher(destination);
+    if (conversation != null && conversation.matches()) {
+      conversations.requireParticipant(userId, parseUuid(conversation.group(1)));
       return;
     }
     Matcher matcher = destination == null ? null : CHANNEL_MESSAGES_SEND.matcher(destination);

@@ -34,4 +34,19 @@ public interface MessageRepository extends JpaRepository<Message, UUID> {
       @Param("beforeCreatedAt") Instant beforeCreatedAt,
       @Param("beforeId") UUID beforeId,
       Pageable pageable);
+
+  @Query(
+      """
+      select m from Message m
+      where m.conversationId = :conversationId
+        and (:beforeCreatedAt is null
+          or m.createdAt < :beforeCreatedAt
+          or (m.createdAt = :beforeCreatedAt and m.id < :beforeId))
+      order by m.createdAt desc, m.id desc
+      """)
+  List<Message> findConversationHistory(
+      @Param("conversationId") UUID conversationId,
+      @Param("beforeCreatedAt") Instant beforeCreatedAt,
+      @Param("beforeId") UUID beforeId,
+      Pageable pageable);
 }
