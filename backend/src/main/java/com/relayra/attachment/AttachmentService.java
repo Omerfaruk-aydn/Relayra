@@ -215,7 +215,13 @@ public class AttachmentService {
           ErrorCodes.INSUFFICIENT_PERMISSION,
           "Only the author can attach files to this message.");
     }
-    requireMessageScopeAccess(callerId, message);
+    if (message.getDeletedAt() != null) {
+      throw new DomainException(
+          HttpStatus.CONFLICT.value(),
+          ErrorCodes.MESSAGE_DELETED,
+          "Attachments cannot be added to a deleted message.");
+    }
+    requireAttachPermission(callerId, message);
     List<AttachmentResponse> linked =
         attachmentIds.stream()
             .map(
