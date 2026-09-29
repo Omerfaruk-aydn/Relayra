@@ -92,18 +92,29 @@ public class CommunityService {
   public List<CommunityResponse> listMine(UUID callerId) {
     requireActiveUser(callerId);
     List<CommunityMember> memberships = members.findByUserIdAndStatus(callerId, MemberStatus.ACTIVE);
+    if (memberships.isEmpty()) {
+      return List.of();
+    }
+    List<UUID> communityIds =
+        memberships.stream().map(CommunityMember::getCommunityId).distinct().toList();
+    Map<UUID, Community> communitiesById =
+        communities.findAllById(communityIds).stream()
+            .collect(Collectors.toMap(Community::getId, community -> community));
+    Map<UUID, Long> countsByCommunity =
+        members.countActiveByCommunityIds(communityIds).stream()
+            .collect(
+                Collectors.toMap(
+                    CommunityMemberCount::communityId, CommunityMemberCount::memberCount));
     return memberships.stream()
         .map(
-            m ->
-                communities
-                    .findById(m.getCommunityId())
-                    .map(
-                        c ->
-                            toResponse(
-                                c,
-                                members.countByCommunityIdAndStatus(
-                                    c.getId(), MemberStatus.ACTIVE)))
-                    .orElse(null))
+            m -> {
+              Community community = communitiesById.get(m.getCommunityId());
+              if (community == null) {
+                return null;
+              }
+              return toResponse(
+                  community, countsByCommunity.getOrDefault(community.getId(), 0L));
+            })
         .filter(r -> r != null)
         .toList();
   }
